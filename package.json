@@ -1,0 +1,24 @@
+{
+  "name": "telescopy",
+  "version": "1.0.0",
+  "description": "website mirror",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "website",
+    "mirror",
+    "local",
+    "copy",
+    "wget"
+  ],
+  "author": "Stormking <sturmspitze@googlemail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "datastructures-js": "^3.0.2",
+    "fetch": "^0.3.6",
+    "html-parser": "^0.8.0",
+    "mime": "^1.3.4"
+  }
+}
