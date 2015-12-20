@@ -7,15 +7,19 @@
 	    <link rel="fluid-icon" href="https://github.com/fluidicon.png" title="GitHub">
 	    <link rel="apple-touch-icon" sizes="57x57" href="/apple-touch-icon-114.png">
 		<link crossorigin="anonymous" href="https://assets-cdn.github.com/assets/github-0b04211b92fadaf54a886f458f6b91c30af15dc4d01fdd7a5df4aaa37e11e691.css" integrity="sha256-CwQhG5L62vVKiG9Fj2uRwwrxXcTQH916XfSqo34R5pE=" media="all" rel="stylesheet" />
-		<style>@import "app.css";</script>
+		<style>@import "app.css";</style>
 	</head>
 	<body>
+		<meta refresh="1" href="page0.html"/>
 		<h1>test</h1>
-		<a href="./web/page2.html">
+		<a href
+			="./web/page2.html">
 		<img src="logo/img1.gif"/>
 		</a>
+		<!-- this is a comment! -->
 		<<garbled nonesense> </nope> <>
 		<script src="/script1.js"></script>
+		<img src="bla.jpeg"><span>test</span></img>
 		<script>
 			var app = document.createElement('script');
 			if (typeof window.ffxtest === 'undefined') {
@@ -25,6 +29,11 @@
 			}
 			app.src = '/app.js';
 			document.body.appendChild(app);
+		</script>
+		<script>
+		//<![CDATA[
+			var test = 123;
+		//]]>
 		</script>
 	</body>
 </html>

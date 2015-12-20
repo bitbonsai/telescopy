@@ -3,20 +3,61 @@ const Util = require("./Util");
 const ParserHtml = require("html-parser");
 const DataStructures = require("datastructures-js");
 const URL = require("url");
+const Fetch = require("fetch");
+const FS = require("fs");
 const mime = require("mime");
+const TransformerHtml = require("./TransformHtml");
+const Curli = require("curli");
+const async = require("async");
+const CP = require("child_process");
+const debug = require("debug")("tcopy-resource");
+const Stream = require("stream");
 
 function Resource() {
 	this.project = null;
 	this.remoteUrl = '';
 	this.localPath = '';
+	this.tempFile = '';
 	this.downloaded = false;
-	this.parsed = new Set();
+	this.parsedResources = new Set();
 	this.remoteHeaders = null;
 	this.mime = '';
-	this.body = '';
-	this.alias = '';
 	this.baseUrl = '/';
+	this.expectedMime = '';
+	this.expectedLocalPath = '';
 }
+
+Resource.prototype.process = function () {
+	var ths = this;
+
+	var p = Promise.resolve(this.getHeaders());
+	p = p.then(function(headers){
+		ths.remoteHeaders = headers;
+	},function(err){
+		console.log("unable to fetch headers for ",ths.remoteUrl,err);
+	}).then(function(){
+		if (ths.localPath && ths.project.skipExistingFiles) {	//we already have a local copy
+			return true;
+		}
+		return ths.download();
+	}).then(function(){
+		if (ths.localPath) {
+			return ths.isTempFileDifferent();
+		} else {
+			return true;
+		}
+	},function(err){
+		console.log("unable to download",err,err.stack.split("\n"));
+		//delete local file?
+		return false;
+	}).then(function(different){
+		if (different) {
+			ths.project.addResourceUrls( ths.parsedResources );
+			return ths.overrideFromTmpFile();
+		}
+	});
+	return p;
+};
 
 Resource.prototype.download = function () {
 	var ths = this;
@@ -24,13 +65,123 @@ Resource.prototype.download = function () {
 		if (!ths.remoteUrl) {
 			return reject("cannot download, no remote url");
 		}
-		Util.retrieveWebResource( ths.remoteUrl, {})
-		.then(function(data){
-			ths.remoteHeaders = data.meta.responseHeaders;
-			ths.body = data.body;
-			ths.mime = ths.guessMime();
-			resolve(ths);
-		},reject);
+		if (!ths.tempFile) {
+			ths.tempFile = ths.project.getTmpFileName();
+		}
+		var saveStream = FS.createWriteStream( ths.tempFile );
+		var transformStream;
+		switch (ths.guessMime()) {
+			case 'html':
+			case 'text/html':
+				transformStream = new TransformerHtml( ths.updateHtmlAttributes.bind(ths) );
+			break;
+
+			default:
+				transformStream = new Stream.PassThrough();
+			break;
+		}
+		var remoteStream = new Fetch.FetchStream( ths.remoteUrl, {});
+		remoteStream.on("meta",function(meta){
+			console.log("remote meta",meta);
+			ths.remoteHeaders = meta.responseHeaders;
+		});
+		remoteStream
+			.pipe( transformStream )
+			.pipe( saveStream );
+		saveStream.on("end", resolve);
+
+	});
+};
+
+Resource.prototype.isTempFileDifferent = function () {
+	return new Promise(function(resolve, reject) {
+		async.parallel([
+			function(cb){
+				let hash = new Crypto.Hash();
+				fs.createReadStream( ths.localPath ).pipe(hash).on("end",cb);
+			},
+			function(cb){
+				let hash = new Crypto.Hash();
+				fs.createReadStream( ths.tmpName ).pipe(hash).on("end",cb);
+			}
+		],function(err,res){
+			if (err) reject(err);
+			else resolve( res[0] === res[1] );
+		})
+	});
+};
+
+Resource.prototype.overrideFromTmpFile = function () {
+	return new Promise(function(resolve, reject) {
+		async.series([
+			function(cb){
+				CP.exec(`mv ${ths.tmpName} ${ths.localPath}`,null,cb)
+			},
+			function(cb){
+				FS.unlink(ths.tmpName,cb);
+			}
+		],function(err){
+			if (err) reject(err);
+			else resolve();
+		});
+	});
+};
+
+Resource.prototype.updateHtmlAttributes = function (tag, attributes) {
+	switch (tag) {
+		case 'a':
+			if (attributes.href) {
+				attributes.href = this.processResourceLink( attributes.href, 'html' );
+			}
+		break;
+
+		case 'link':
+			if (attributes.rel === 'stylesheet' && attributes.href) {
+				attributes.href = this.processResourceLink( attributes.href, 'css' );
+			}
+		break;
+
+		case 'img':
+			if (attributes.src) {
+				attributes.src = this.processResourceLink( attributes.src, 'image' );
+			}
+		break;
+
+		case 'script':
+			if (attributes.src) {
+				attributes.src = this.processResourceLink( attributes.src, 'script' );
+			}
+		break;
+
+		case 'base':
+			if (attributes.href) {
+				this.baseUrl = attributes.href;
+			}
+		break;
+	}
+	return attributes;
+};
+
+/**
+ * @param string url
+ * @param string type
+ * @return string local url
+ **/
+Resource.prototype.processResourceLink = function (url, type) {
+	let absolute = this.project.makeUrlAbsolute( url );
+	let localUrl = this.getLocalUrl( absolute );
+	let localFile = this.getLocalFile( absolute );
+	this.parsedResources.add([ absolute, localFile, type ]);
+	return localUrl;
+};
+
+Resource.prototype.getHeaders = function () {
+	var ths = this;
+	return new Promise(function(resolve, reject) {
+		Curli(ths.remoteUrl,{},function(err,res){
+			if (err) reject(err);
+			else resolve(res);
+		});
 	});
 };
 
@@ -78,77 +229,17 @@ Resource.prototype.guessMime = function () {
 			type = type.substring(0,cpos);
 		}
 	}
-	console.log( fromUrl, type );
+	debug( "guessingMime", this.expectedMime, fromUrl, type );
+	if (this.expectedMime) {
+		let reg = new Regex(this.expectedMime,"i");
+		if (fromUrl.test(reg)) {
+			return fromUrl;
+		}
+		if (type.test(reg)) {
+			return type;
+		}
+	}
 	return type ? type : fromUrl;
-};
-
-
-Resource.prototype.parseUrisFromHtml = function() {
-	var stack = DataStructures.stack();
-	var extracted = new Set();
-	var pop = function(){
-		let elem = stack.pop();
-		//console.log("popping",elem);
-		if (elem.tag === 'a' && elem.href) {
-			extracted.add([ elem.href, 'html' ]);
-		} else if (elem.tag === 'link' && elem.rel === 'stylesheet' && elem.href) {
-			extracted.add([ elem.href, 'css' ]);
-		} else if (elem.tag === 'img' && elem.src) {
-			extracted.add([ elem.src, 'image' ]);
-		} else if (elem.tag === 'script' && elem.src) {
-			extracted.add([ elem.src, 'js' ]);
-		} else if (elem.tag === 'base' && elem.href) {
-			this.baseUrl = elem.href;	//override base url
-		}
-	};
-	ParserHtml.parse( this.body, {
-		openElement : function(name){
-			//console.log('open: %s', name);
-			stack.push( { tag : name } );
-		},
-		closeElement : function(name) {
-			let top = stack.peek();
-			//console.log('close: %s', name,top);
-			if (top && name === top.tag) {
-				pop();
-			}
-		},
-		attribute : function(name, value) {
-			//console.log('attribute: %s=%s', name, value);
-			let elem = stack.peek();
-			elem[name] = value;
-
-		},
-		closeOpenedElement: function(name, token, unary) {
-			//console.log('token: %s, unary: %s', token, unary);
-			if (unary) {
-				pop();
-			}
-		},
-		comment: function(value) { console.log('comment: %s', value); },
-		cdata: function(value) {
-			//console.log('cdata: %s', value);
-			let current = stack.peek();
-			if (!current) return;
-			if (current.tag === 'script') {
-				let ext = methods.analyseJsForUris( value );
-				ext.forEach(function(v){ extracted.add(v); });
-			}
-		},
-		docType: function(value) {
-			//console.log('doctype: %s', value);
-		},
-		text: function(value) {
-			//console.log('text: %s', value);
-			let current = stack.peek();
-			if (!current) return;
-			if (current.tag === 'style') {
-				let ext = methods.analyseCssForImport( value );
-				ext.forEach(function(v){ extracted.add(v); });
-			}
-		}
-	});
-	return this.makeSetAbsolute( extracted );
 };
 
 Resource.prototype.makeUrlAbsolute = function( url ) {
@@ -187,7 +278,7 @@ Resource.prototype.analyseJsForUris = function(str) {
 	return this.makeSetAbsolute( extracted );
 };
 
-methods.analyseCssForImport = function(str) {
+Resource.prototype.analyseCssForImport = function(str) {
 	var extracted = new Set();
 	str.replace(/@import "([^"]+)"/,function(all,url){
 		extracted.add([ url, 'css' ]);
