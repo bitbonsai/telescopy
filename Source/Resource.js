@@ -7,11 +7,15 @@ const Fetch = require("fetch");
 const FS = require("fs");
 const mime = require("mime");
 const TransformerHtml = require("./TransformHtml");
+const TransformerCss = require("./TransformCss");
 const Curli = require("curli");
 const async = require("async");
 const CP = require("child_process");
 const debug = require("debug")("tcopy-resource");
 const Stream = require("stream");
+const Path = require("path");
+const MIME = require("mime");
+const Crypto = require("crypto");
 
 function Resource() {
 	this.project = null;
@@ -22,14 +26,13 @@ function Resource() {
 	this.parsedResources = new Set();
 	this.remoteHeaders = null;
 	this.mime = '';
-	this.baseUrl = '/';
+	this.baseUrl = '';
 	this.expectedMime = '';
 	this.expectedLocalPath = '';
 }
 
 Resource.prototype.process = function () {
 	var ths = this;
-
 	var p = Promise.resolve(this.getHeaders());
 	p = p.then(function(headers){
 		ths.remoteHeaders = headers;
@@ -41,7 +44,8 @@ Resource.prototype.process = function () {
 		}
 		return ths.download();
 	}).then(function(){
-		if (ths.localPath) {
+		//ths.parsedResources = ths.makeSetAbsolute( ths.parsedResources );
+		if (ths.localPath && ths.tempFile) {
 			return ths.isTempFileDifferent();
 		} else {
 			return true;
@@ -51,6 +55,13 @@ Resource.prototype.process = function () {
 		//delete local file?
 		return false;
 	}).then(function(different){
+		if (!ths.localPath) {
+			if (false && ths.expectedLocalPath) {
+				ths.localPath = ths.expectedLocalPath;
+			} else {
+				ths.localPath = ths.calculateLocalPathFromUrl( ths.remoteUrl, ths.guessMime() );
+			}
+		}
 		if (different) {
 			ths.project.addResourceUrls( ths.parsedResources );
 			return ths.overrideFromTmpFile();
@@ -70,10 +81,19 @@ Resource.prototype.download = function () {
 		}
 		var saveStream = FS.createWriteStream( ths.tempFile );
 		var transformStream;
-		switch (ths.guessMime()) {
+		var guessedMime = ths.guessMime();
+		debug("guessed Mime: ",guessedMime);
+		switch (guessedMime) {
 			case 'html':
 			case 'text/html':
 				transformStream = new TransformerHtml( ths.updateHtmlAttributes.bind(ths) );
+			break;
+
+			case 'text/css':
+				transformStream = new TransformerCss({
+					onUrl : ths.updateCssUrl.bind(ths),
+					onImport : ths.updateCssUrl.bind(ths)
+				});
 			break;
 
 			default:
@@ -82,27 +102,27 @@ Resource.prototype.download = function () {
 		}
 		var remoteStream = new Fetch.FetchStream( ths.remoteUrl, {});
 		remoteStream.on("meta",function(meta){
-			console.log("remote meta",meta);
 			ths.remoteHeaders = meta.responseHeaders;
 		});
 		remoteStream
 			.pipe( transformStream )
 			.pipe( saveStream );
-		saveStream.on("end", resolve);
+		transformStream.on("end", resolve);
 
 	});
 };
 
 Resource.prototype.isTempFileDifferent = function () {
+	var ths = this;
 	return new Promise(function(resolve, reject) {
 		async.parallel([
 			function(cb){
-				let hash = new Crypto.Hash();
-				fs.createReadStream( ths.localPath ).pipe(hash).on("end",cb);
+				let hash = new Crypto.Hash("sha1");
+				FS.createReadStream( ths.localPath ).pipe(hash).on("end",cb);
 			},
 			function(cb){
-				let hash = new Crypto.Hash();
-				fs.createReadStream( ths.tmpName ).pipe(hash).on("end",cb);
+				let hash = new Crypto.Hash("sha1");
+				FS.createReadStream( ths.tmpName ).pipe(hash).on("end",cb);
 			}
 		],function(err,res){
 			if (err) reject(err);
@@ -112,13 +132,18 @@ Resource.prototype.isTempFileDifferent = function () {
 };
 
 Resource.prototype.overrideFromTmpFile = function () {
+	var ths = this;
 	return new Promise(function(resolve, reject) {
 		async.series([
 			function(cb){
-				CP.exec(`mv ${ths.tmpName} ${ths.localPath}`,null,cb)
+				let dirname = Path.dirname(ths.localPath);
+				FS.mkdir(dirname,function(err){
+					if (err && err.code === 'EEXIST') cb();
+					else cb(err);
+				});
 			},
 			function(cb){
-				FS.unlink(ths.tmpName,cb);
+				CP.exec(`mv ${ths.tempFile} ${ths.localPath}`,null,cb)
 			}
 		],function(err){
 			if (err) reject(err);
@@ -131,25 +156,25 @@ Resource.prototype.updateHtmlAttributes = function (tag, attributes) {
 	switch (tag) {
 		case 'a':
 			if (attributes.href) {
-				attributes.href = this.processResourceLink( attributes.href, 'html' );
+				attributes.href = this.processResourceLink( attributes.href, 'text/html' );
 			}
 		break;
 
 		case 'link':
 			if (attributes.rel === 'stylesheet' && attributes.href) {
-				attributes.href = this.processResourceLink( attributes.href, 'css' );
+				attributes.href = this.processResourceLink( attributes.href, 'text/css' );
 			}
 		break;
 
 		case 'img':
 			if (attributes.src) {
-				attributes.src = this.processResourceLink( attributes.src, 'image' );
+				attributes.src = this.processResourceLink( attributes.src, MIME.lookup(attributes.src) );
 			}
 		break;
 
 		case 'script':
 			if (attributes.src) {
-				attributes.src = this.processResourceLink( attributes.src, 'script' );
+				attributes.src = this.processResourceLink( attributes.src, 'application/javascript' );
 			}
 		break;
 
@@ -162,15 +187,21 @@ Resource.prototype.updateHtmlAttributes = function (tag, attributes) {
 	return attributes;
 };
 
+Resource.prototype.updateCssUrl = function (url) {
+	let mime = MIME.lookup(url);
+	return this.processResourceLink( url, mime );
+};
+
 /**
  * @param string url
  * @param string type
  * @return string local url
  **/
 Resource.prototype.processResourceLink = function (url, type) {
-	let absolute = this.project.makeUrlAbsolute( url );
-	let localUrl = this.getLocalUrl( absolute );
-	let localFile = this.getLocalFile( absolute );
+	debug("processResourceLink",url,type);
+	let absolute = this.makeUrlAbsolute( url, this.remoteUrl );
+	let localFile = this.calculateLocalPathFromUrl( absolute, type );
+	let localUrl = this.calculateLocalUrl( localFile );
 	this.parsedResources.add([ absolute, localFile, type ]);
 	return localUrl;
 };
@@ -185,40 +216,6 @@ Resource.prototype.getHeaders = function () {
 	});
 };
 
-Resource.prototype.parse = function () {
-	var ths = this;
-	return new Promise(function(resolve, reject) {
-		if (!ths.body) {
-			return reject("cannot parse, no body");
-		}
-
-		switch (this.mime) {
-			case 'text/html':
-				ths.parseAsHtml();
-				resolve(this);
-			break;
-
-			case 'stylesheet/css':
-				ths.parseAsCss();
-				resolve(this);
-			break;
-
-			default:
-				reject("no parser");
-			break;
-		}
-	});
-};
-
-Resource.prototype.parseAsHtml = function () {
-	let uris = Util.parseUrisFromHtml( this.body, this.remoteUrl );
-	this.parsed = uris;
-};
-
-Resource.prototype.parseAsCss = function() {
-	let uris = Util.analyseCssForImport( this.body );
-	this.parsed = uris;
-};
 
 Resource.prototype.guessMime = function () {
 	let fromUrl = mime.lookup( this.remoteUrl );
@@ -229,32 +226,23 @@ Resource.prototype.guessMime = function () {
 			type = type.substring(0,cpos);
 		}
 	}
-	debug( "guessingMime", this.expectedMime, fromUrl, type );
+	debug( "guessingMime", [this.expectedMime, fromUrl, type] );
 	if (this.expectedMime) {
-		let reg = new Regex(this.expectedMime,"i");
-		if (fromUrl.test(reg)) {
+		let reg = new RegExp(this.expectedMime,"i");
+		if (reg.test(fromUrl)) {
 			return fromUrl;
 		}
-		if (type.test(reg)) {
+		if (reg.test(type)) {
 			return type;
 		}
+		return this.expectedMime;
 	}
 	return type ? type : fromUrl;
 };
 
-Resource.prototype.makeUrlAbsolute = function( url ) {
-	var baseUrl = this.getBaseUrl();
+Resource.prototype.makeUrlAbsolute = function( url, baseUrl ) {
+	debug("make asbolute",baseUrl,url);
 	return URL.resolve( baseUrl, url );
-};
-
-Resource.prototype.makeSetAbsolute = function (set) {
-	var set2 = new Set();
-	var absolute = this.makeUrlAbsolute;
-	set.forEach(function(x){
-		x[0] = absolute(x[0]);
-		set2.add(x);
-	});
-	return set2;
 };
 
 Resource.prototype.getBaseUrl = function () {
@@ -267,26 +255,32 @@ Resource.prototype.getBaseUrl = function () {
 	return this.project.httpEntry;
 };
 
-Resource.prototype.analyseJsForUris = function(str) {
-	var extracted = new Set();
-	str.replace(/\.src\s*=\s*"([^"]+)"/i,function(all,url){
-		extracted.add( [url,'js'] );
-	});
-	str.replace(/\.src\s*=\s*'([^']+)'/i,function(all,url){
-		extracted.add( [url,'js'] );
-	});
-	return this.makeSetAbsolute( extracted );
+Resource.prototype.calculateLocalPathFromUrl = function ( url, mime ) {
+	let basePath = this.project.localPath;
+	let parsedUrl = URL.parse( url, true, true );
+	var queryString = '';
+	if (parsedUrl.search) {	//add query as base64
+		queryString = new Buffer(parsedUrl.search).toString("base64");
+	}
+	let ext = MIME.extension( mime );
+	let ending = "." + (ext ? ext : 'html');
+	let path = parsedUrl.pathname.length > 1 ? parsedUrl.pathname : 'index';
+	let pathExt = Path.extname(path);
+	if (pathExt) {
+		path = path.substr(0, path.length - pathExt.length);
+	}
+	path += queryString;
+	path += ending;
+	let full = Path.join( basePath, parsedUrl.hostname, path);
+	debug("calculated local path to be "+full);
+	return full;
 };
 
-Resource.prototype.analyseCssForImport = function(str) {
-	var extracted = new Set();
-	str.replace(/@import "([^"]+)"/,function(all,url){
-		extracted.add([ url, 'css' ]);
-	});
-	str.replace(/@import '([^"]+)'/,function(all,url){
-		extracted.add([ url, 'css' ]);
-	});
-	return this.makeSetAbsolute( extracted );
+Resource.prototype.calculateLocalUrl = function ( localFile ) {
+	let baseUrl = this.getBaseUrl();
+	let basePath = this.project.localPath;
+	debug("calc localUrl from "+JSON.stringify([baseUrl,basePath,localFile]));
+	return localFile.substr( basePath.length );
 };
 
 module.exports = Resource;

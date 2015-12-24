@@ -2,7 +2,7 @@
 const Stream = require("stream");
 const Util = require("util");
 const ParserHtml = require("htmlparser2");
-const debug = require("debug")("tcopy-transform");
+const debug = require("debug")("tcopy-transform-html");
 
 function TransformerHtml(fnUpdateAttribute) {
 	Stream.Transform.call(this, {});
@@ -10,7 +10,7 @@ function TransformerHtml(fnUpdateAttribute) {
 	this.parser = new ParserHtml.Parser({
 		onopentag : function(name, attributes) {
 			let attrStr = '';
-			attributes = ths.updateAttributes(attributes);
+			attributes = ths.updateAttributes(name, attributes);
 			for (let k in attributes) {
 				attrStr += ` ${k}="${attributes[k]}"`;
 			}
@@ -25,13 +25,16 @@ function TransformerHtml(fnUpdateAttribute) {
 		},
 		onclosetag : function(name) {
 			debug("onclosetag",arguments);
-			if (!Transformer.selfClosing[name]) {
+			if (!TransformerHtml.selfClosing[name]) {
 				ths.push(`</${name}>`);
 			}
 		},
 		onprocessinginstruction : function(name, data) {
 			debug("onprocessinginstruction",arguments);
 			ths.push(`<${data}>`);
+		},
+		onend : function() {
+			ths.emit("end");
 		}
 	},{
 		decodeEntities : true,
