@@ -6,6 +6,9 @@ const FS = require("fs");
 const async = require("async");
 const Path = require("path");
 const CP = require("child_process");
+const Fetch = require("fetch");
+const HTTP = require("http");
+const HTTPS = require("https");
 
 function Project(options) {
 
@@ -15,6 +18,16 @@ function Project(options) {
 	this.tempDir = options.tempDir || '/tmp/telescopy';
 	this.skipExistingFiles = options.skipExistingFiles;
 	this.onFinish = options.onFinish;
+
+	this.userAgent = options.useragent || 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1';
+	this.agentOptions = {
+		keepAlive : true,
+		keepAliveMsecs : 3000,
+		maxSockets : 1000,
+		maxFreeSockets : 256
+	};
+	this.httpAgent = new HTTP.Agent(this.agentOptions);
+	this.httpsAgent = new HTTPS.Agent(this.agentOptions);
 
 	this.id = '';
 	this.running = false;
@@ -27,6 +40,17 @@ function Project(options) {
 
 	this.next = this.processNext.bind(this);
 }
+
+Project.prototype.fetch = function (url) {
+	let https = url.substr(0,6) === 'https:';
+	let stream = new Fetch.FetchStream(url,{
+		userAgent : this.userAgent,
+		agent : https ? this.httpsAgent : this.httpAgent,
+		encoding : 'utf8'
+	});
+	stream.pause();
+	return stream;
+};
 
 Project.prototype.start = function() {
 	if (this.running) {
@@ -41,7 +65,7 @@ Project.prototype.start = function() {
 	p = p.then(this.prepareLocalDirectories.bind(this));
 	p.then(function(){
 		let res = ths.getResourceByUrl( ths.httpEntry );
-		res.expectedMime = 'html';
+		res.expectedMime = 'text/html';
 		ths.queue.enqueue( res );
 		ths.processNext();
 	}).catch(function(err){
@@ -81,6 +105,8 @@ Project.prototype.finish = function (finished) {
 	if (this.onFinish) {
 		this.onFinish(finished);
 	}
+	this.httpAgent.destroy();
+	this.httpsAgent.destroy();
 };
 
 

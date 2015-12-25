@@ -3,12 +3,10 @@ const Util = require("./Util");
 const ParserHtml = require("html-parser");
 const DataStructures = require("datastructures-js");
 const URL = require("url");
-const Fetch = require("fetch");
 const FS = require("fs");
 const mime = require("mime");
 const TransformerHtml = require("./TransformHtml");
 const TransformerCss = require("./TransformCss");
-const Curli = require("curli");
 const async = require("async");
 const CP = require("child_process");
 const debug = require("debug")("tcopy-resource");
@@ -33,34 +31,41 @@ function Resource() {
 
 Resource.prototype.process = function () {
 	var ths = this;
-	var p = Promise.resolve(this.getHeaders());
-	p = p.then(function(headers){
-		ths.remoteHeaders = headers;
-	},function(err){
-		console.log("unable to fetch headers for ",ths.remoteUrl,err);
-	}).then(function(){
+	var p = Promise.resolve(ths.project.fetch( this.remoteUrl ));
+	p = p.then(function(fetchStream){
+		return new Promise(function(resolve, reject) {
+			fetchStream.on("meta",function(meta){
+				debug("meta",meta);
+				ths.remoteUrl = meta.finalUrl;	//in case of redirects
+				ths.remoteHeaders = meta.responseHeaders;
+				if (meta.status >= 400) {
+					debug("WARN 404");
+					reject(meta);
+				} else {
+					resolve(fetchStream);
+				}
+			});
+			fetchStream.on("error",reject);
+		});
+
+	}).then(function(fetchStream){
 		if (ths.localPath && ths.project.skipExistingFiles) {	//we already have a local copy
 			return true;
 		}
-		return ths.download();
+		return ths.download(fetchStream);
 	}).then(function(){
-		//ths.parsedResources = ths.makeSetAbsolute( ths.parsedResources );
 		if (ths.localPath && ths.tempFile) {
 			return ths.isTempFileDifferent();
 		} else {
 			return true;
 		}
 	},function(err){
-		console.log("unable to download",err,err.stack.split("\n"));
+		console.log("unable to download",err);
 		//delete local file?
 		return false;
 	}).then(function(different){
 		if (!ths.localPath) {
-			if (false && ths.expectedLocalPath) {
-				ths.localPath = ths.expectedLocalPath;
-			} else {
-				ths.localPath = ths.calculateLocalPathFromUrl( ths.remoteUrl, ths.guessMime() );
-			}
+			ths.localPath = ths.calculateLocalPathFromUrl( ths.remoteUrl, ths.guessMime() );
 		}
 		if (different) {
 			ths.project.addResourceUrls( ths.parsedResources );
@@ -70,7 +75,7 @@ Resource.prototype.process = function () {
 	return p;
 };
 
-Resource.prototype.download = function () {
+Resource.prototype.download = function(fetchStream) {
 	var ths = this;
 	return new Promise(function(resolve, reject) {
 		if (!ths.remoteUrl) {
@@ -100,15 +105,12 @@ Resource.prototype.download = function () {
 				transformStream = new Stream.PassThrough();
 			break;
 		}
-		var remoteStream = new Fetch.FetchStream( ths.remoteUrl, {});
-		remoteStream.on("meta",function(meta){
-			ths.remoteHeaders = meta.responseHeaders;
-		});
-		remoteStream
+
+		fetchStream
 			.pipe( transformStream )
 			.pipe( saveStream );
 		transformStream.on("end", resolve);
-
+		fetchStream.resume();
 	});
 };
 
@@ -205,17 +207,6 @@ Resource.prototype.processResourceLink = function (url, type) {
 	this.parsedResources.add([ absolute, localFile, type ]);
 	return localUrl;
 };
-
-Resource.prototype.getHeaders = function () {
-	var ths = this;
-	return new Promise(function(resolve, reject) {
-		Curli(ths.remoteUrl,{},function(err,res){
-			if (err) reject(err);
-			else resolve(res);
-		});
-	});
-};
-
 
 Resource.prototype.guessMime = function () {
 	let fromUrl = mime.lookup( this.remoteUrl );
