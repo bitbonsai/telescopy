@@ -166,7 +166,7 @@ Project.prototype.addResourceUrls = function (set) {
 		debug("adding url",url);
 		let res = ths.getResourceByUrl(url);
 		res.expectedMime = entry[2];
-		res.expectedLocalPath = entry[1];
+		//res.expectedLocalPath = entry[1];
 		ths.queue.enqueue(res);
 		ths.queuedUrls.add(url);
 		added += 1;

@@ -11,6 +11,10 @@ function TransformerHtml(fnUpdateAttribute) {
 		onopentag : function(name, attributes) {
 			let attrStr = '';
 			attributes = ths.updateAttributes(name, attributes);
+			if (attributes === false) {
+				ths.push('');	//@TODO: works on self-closing only
+				return;
+			}
 			for (let k in attributes) {
 				attrStr += ` ${k}="${attributes[k]}"`;
 			}

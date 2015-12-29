@@ -1,6 +1,9 @@
+
+@import "normalize.css";
+
 body {
 	background: url('bg.jpeg');
 	test : url(test.png);
 	test2 : url("test3.jpg");
+	color: #fff;
 }
-@import "normalize.css";

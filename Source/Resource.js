@@ -26,7 +26,7 @@ function Resource() {
 	this.mime = '';
 	this.baseUrl = '';
 	this.expectedMime = '';
-	this.expectedLocalPath = '';
+	this.expectedLocalPath = '';	//from canonical url
 }
 
 Resource.prototype.process = function () {
@@ -65,7 +65,11 @@ Resource.prototype.process = function () {
 		return false;
 	}).then(function(different){
 		if (!ths.localPath) {
-			ths.localPath = ths.calculateLocalPathFromUrl( ths.remoteUrl, ths.guessMime() );
+			if (ths.expectedLocalPath) {
+				ths.localPath = ths.expectedLocalPath;
+			} else {
+				ths.localPath = ths.calculateLocalPathFromUrl( ths.remoteUrl, ths.guessMime() );
+			}
 		}
 		if (different) {
 			ths.project.addResourceUrls( ths.parsedResources );
@@ -115,8 +119,7 @@ Resource.prototype.download = function(fetchStream) {
 };
 
 Resource.prototype.isTempFileDifferent = function () {
-	var ths = this;
-	return new Promise(function(resolve, reject) {
+	var ths = this;new Promise(function(resolve, reject) {
 		async.parallel([
 			function(cb){
 				let hash = new Crypto.Hash("sha1");
@@ -124,12 +127,12 @@ Resource.prototype.isTempFileDifferent = function () {
 			},
 			function(cb){
 				let hash = new Crypto.Hash("sha1");
-				FS.createReadStream( ths.tmpName ).pipe(hash).on("end",cb);
+				FS.createReadStream( ths.tempFile ).pipe(hash).on("end",cb);
 			}
 		],function(err,res){
 			if (err) reject(err);
 			else resolve( res[0] === res[1] );
-		})
+		});
 	});
 };
 
@@ -163,6 +166,11 @@ Resource.prototype.updateHtmlAttributes = function (tag, attributes) {
 		break;
 
 		case 'link':
+			if (attributes.rel === 'canonical' && attributes.href) {
+				let absolute = this.makeUrlAbsolute( attributes.href, this.remoteUrl );
+				this.expectedLocalPath = this.calculateLocalPathFromUrl( absolute, 'text/html' );	//use canonical to override local path
+				attributes.href = this.calculateLocalUrl( this.expectedLocalPath, absolute );
+			}
 			if (attributes.rel === 'stylesheet' && attributes.href) {
 				attributes.href = this.processResourceLink( attributes.href, 'text/css' );
 			}
@@ -183,6 +191,29 @@ Resource.prototype.updateHtmlAttributes = function (tag, attributes) {
 		case 'base':
 			if (attributes.href) {
 				this.baseUrl = attributes.href;
+				return false;	//delete it
+			}
+		break;
+
+		case 'form':
+			if (attributes.action) {
+				attributes.action = this.processResourceLink( attributes.action, 'text/html' );
+			}
+		break;
+
+		case 'button':
+			if (attributes.formaction) {
+				attributes.formaction = this.processResourceLink( attributes.formaction, 'text/html' );
+			}
+		break;
+
+		case 'meta':
+			if (attributes['http-equiv'] === 'refresh' && attributes.content) {
+				let ths = this;
+				attributes.content.replace(/^(\d+);url=(.+)$/i,function(all,time,url){
+					url = ths.processResourceLink( url, 'text/html' );
+					return `${time};url=${url}`;
+				});
 			}
 		break;
 	}
@@ -199,12 +230,14 @@ Resource.prototype.updateCssUrl = function (url) {
  * @param string type
  * @return string local url
  **/
-Resource.prototype.processResourceLink = function (url, type) {
+Resource.prototype.processResourceLink = function (url, type, skipAdd) {
 	debug("processResourceLink",url,type);
-	let absolute = this.makeUrlAbsolute( url, this.remoteUrl );
+	let absolute = this.makeUrlAbsolute( url, this.getBaseUrl() );
 	let localFile = this.calculateLocalPathFromUrl( absolute, type );
 	let localUrl = this.calculateLocalUrl( localFile, absolute );
-	this.parsedResources.add([ absolute, localFile, type ]);
+	if (!skipAdd) {
+		this.parsedResources.add([ absolute, localFile, type ]);
+	}
 	return localUrl;
 };
 
@@ -236,14 +269,11 @@ Resource.prototype.makeUrlAbsolute = function( url, baseUrl ) {
 	return URL.resolve( baseUrl, url );
 };
 
-Resource.prototype.getBaseUrl = function () {
+Resource.prototype.getBaseUrl = function() {
 	if (this.baseUrl) {
 		return this.baseUrl;
 	}
-	if (this.parentResource) {
-		return this.parentResource.getBaseUrl();
-	}
-	return this.project.httpEntry;
+	return this.remoteUrl;
 };
 
 Resource.prototype.calculateLocalPathFromUrl = function ( url, mime ) {
