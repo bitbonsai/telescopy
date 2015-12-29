@@ -12,6 +12,7 @@ var prepare = function() {
 	server = new StaticServer({
 		rootPath : remote,
 		port : 8080,
+		followSymlink : true,
 		index : 'index.html'
 	});
 	server.start(runTest);

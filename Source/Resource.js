@@ -203,7 +203,7 @@ Resource.prototype.processResourceLink = function (url, type) {
 	debug("processResourceLink",url,type);
 	let absolute = this.makeUrlAbsolute( url, this.remoteUrl );
 	let localFile = this.calculateLocalPathFromUrl( absolute, type );
-	let localUrl = this.calculateLocalUrl( localFile );
+	let localUrl = this.calculateLocalUrl( localFile, absolute );
 	this.parsedResources.add([ absolute, localFile, type ]);
 	return localUrl;
 };
@@ -255,7 +255,7 @@ Resource.prototype.calculateLocalPathFromUrl = function ( url, mime ) {
 	}
 	let ext = MIME.extension( mime );
 	let ending = "." + (ext ? ext : 'html');
-	let path = parsedUrl.pathname.length > 1 ? parsedUrl.pathname : 'index';
+	let path = parsedUrl.pathname && parsedUrl.pathname.length > 1 ? parsedUrl.pathname : 'index';
 	let pathExt = Path.extname(path);
 	if (pathExt) {
 		path = path.substr(0, path.length - pathExt.length);
@@ -267,11 +267,14 @@ Resource.prototype.calculateLocalPathFromUrl = function ( url, mime ) {
 	return full;
 };
 
-Resource.prototype.calculateLocalUrl = function ( localFile ) {
+Resource.prototype.calculateLocalUrl = function ( localFile, url ) {
 	let baseUrl = this.getBaseUrl();
+	let parsedUrl = URL.parse( url, false );
+	let search = parsedUrl.search ? parsedUrl.search : '';
+	let hash = parsedUrl.hash ? parsedUrl.hash : '';
 	let basePath = this.project.localPath;
 	debug("calc localUrl from "+JSON.stringify([baseUrl,basePath,localFile]));
-	return localFile.substr( basePath.length );
+	return localFile.substr( basePath.length ) + search + hash;
 };
 
 module.exports = Resource;

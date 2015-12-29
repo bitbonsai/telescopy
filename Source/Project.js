@@ -46,7 +46,7 @@ Project.prototype.fetch = function (url) {
 	let stream = new Fetch.FetchStream(url,{
 		userAgent : this.userAgent,
 		agent : https ? this.httpsAgent : this.httpAgent,
-		encoding : 'utf8'
+		encoding : ''
 	});
 	stream.pause();
 	return stream;
@@ -80,6 +80,7 @@ Project.prototype.processNext = function () {
 		return this.finish(true);
 	}
 	debug("now processing",res.remoteUrl);
+	printMemory();
 	var ths = this;
 	res.process()
 	.then(function(){
@@ -206,5 +207,14 @@ Project.prototype.prepareLocalDirectories = function () {
 	});
 
 };
+
+function printMemory() {
+	let mem = process.memoryUsage();
+	let b = mem.rss+"";
+	for (let i=b.length-3; i>0; i-=3) {
+		b = b.substr(0,i)+"."+b.substr(i);
+	}
+	debug("MEMORY",b);
+}
 
 module.exports = Project;

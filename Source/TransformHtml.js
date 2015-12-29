@@ -34,7 +34,7 @@ function TransformerHtml(fnUpdateAttribute) {
 			ths.push(`<${data}>`);
 		},
 		onend : function() {
-			ths.emit("end");
+			ths.push(null);
 		}
 	},{
 		decodeEntities : true,
