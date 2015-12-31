@@ -9,6 +9,7 @@ const CP = require("child_process");
 const Fetch = require("fetch");
 const HTTP = require("http");
 const HTTPS = require("https");
+const URL = require("url");
 
 function Project(options) {
 
@@ -18,6 +19,17 @@ function Project(options) {
 	this.tempDir = options.tempDir || '/tmp/telescopy';
 	this.skipExistingFiles = options.skipExistingFiles;
 	this.onFinish = options.onFinish;
+
+	if (options.filterByUrl) {
+		this.filterByUrl = options.filterByUrl;
+	} else if (options.urlFilter) {
+		//@TODO implement
+	} else {
+		var entryHost = URL.parse( this.httpEntry, false, true ).host;
+		this.filterByUrl = function(urlParts) {
+			return urlParts.host === entryHost;
+		};
+	}
 
 	this.userAgent = options.useragent || 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1';
 	this.agentOptions = {
@@ -41,7 +53,7 @@ function Project(options) {
 	this.next = this.processNext.bind(this);
 }
 
-Project.prototype.fetch = function (url) {
+Project.prototype.fetch = function(url) {
 	let https = url.substr(0,6) === 'https:';
 	let stream = new Fetch.FetchStream(url,{
 		userAgent : this.userAgent,
@@ -73,14 +85,14 @@ Project.prototype.start = function() {
 	})
 };
 
-Project.prototype.processNext = function () {
+Project.prototype.processNext = function() {
 	var res = this.queue.dequeue();
 	if (!res || this.running === false) {
 		this.running = false;
 		return this.finish(true);
 	}
 	debug("now processing",res.remoteUrl);
-	printMemory();
+	this.printMemory();
 	var ths = this;
 	res.process()
 	.then(function(){
@@ -93,7 +105,7 @@ Project.prototype.processNext = function () {
 	});
 };
 
-Project.prototype.stop = function () {
+Project.prototype.stop = function() {
 	if (!running) {
 		throw new Error("Project not running");
 	}
@@ -101,7 +113,7 @@ Project.prototype.stop = function () {
 	this.finish(false);
 };
 
-Project.prototype.finish = function (finished) {
+Project.prototype.finish = function(finished) {
 	debug("finishing",finished);
 	if (this.onFinish) {
 		this.onFinish(finished);
@@ -128,7 +140,7 @@ Project.prototype.parseResourceForMoreResources = function( res ) {
 	});
 };
 
-Project.prototype.saveResourceLocally = function ( res ) {
+Project.prototype.saveResourceLocally = function( res ) {
 	var localPath = this.getLocalPath( res.remoteUrl );
 	return res;
 };
@@ -138,7 +150,7 @@ Project.prototype.isUrlProcessed = function( url ) {
 		|| this.skippedUrls.has( url );
 };
 
-Project.prototype.getResourceByUrl = function (url, parent) {
+Project.prototype.getResourceByUrl = function(url, parent) {
 	if (this.resourcesByUrl.has(url)) {
 		return this.resourcesByUrl.get(url);
 	}
@@ -151,13 +163,13 @@ Project.prototype.getResourceByUrl = function (url, parent) {
 };
 
 Project.tmpFiles = 0;
-Project.prototype.getTmpFileName = function () {
+Project.prototype.getTmpFileName = function() {
 	Project.tmpFiles += 1;
 	let fname = 'telescopy-tmp-'+Project.tmpFiles;
 	return Path.join( this.tempDir, fname );
 };
 
-Project.prototype.addResourceUrls = function (set) {
+Project.prototype.addResourceUrls = function(set) {
 	var ths = this;
 	var added = 0;
 	set.forEach(function(entry){
@@ -174,11 +186,11 @@ Project.prototype.addResourceUrls = function (set) {
 	debug( "added %s / %s resource urls", added, set.size );
 };
 
-Project.prototype.isUrlQueued = function (url) {
+Project.prototype.isUrlQueued = function(url) {
 	return this.queuedUrls.has(url);
 };
 
-Project.prototype.cleanLocalFiles = function () {
+Project.prototype.cleanLocalFiles = function() {
 	var ths = this;
 	return new Promise(function(resolve, reject) {
 		CP.exec("rm -rf "+ths.localPath,function(err){
@@ -188,7 +200,7 @@ Project.prototype.cleanLocalFiles = function () {
 	});
 };
 
-Project.prototype.prepareLocalDirectories = function () {
+Project.prototype.prepareLocalDirectories = function() {
 	var dirs = [this.tempDir, this.localPath];
 	return new Promise(function(resolve, reject) {
 		dirs.forEach(function(dir){
@@ -208,13 +220,16 @@ Project.prototype.prepareLocalDirectories = function () {
 
 };
 
-function printMemory() {
+Project.prototype.printMemory = function() {
 	let mem = process.memoryUsage();
 	let b = mem.rss+"";
 	for (let i=b.length-3; i>0; i-=3) {
 		b = b.substr(0,i)+"."+b.substr(i);
 	}
-	debug("MEMORY",b);
+	let queue = this.queue.length();
+	let done = this.downloadedUrls.size;
+	let skipped = this.skippedUrls.size;
+	debug("STATS",[b,queue,done,skipped]);
 }
 
 module.exports = Project;

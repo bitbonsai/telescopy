@@ -60,7 +60,7 @@ Resource.prototype.process = function () {
 			return true;
 		}
 	},function(err){
-		console.log("unable to download",err);
+		debug("unable to download",err);
 		//delete local file?
 		return false;
 	}).then(function(different){
@@ -68,7 +68,7 @@ Resource.prototype.process = function () {
 			if (ths.expectedLocalPath) {
 				ths.localPath = ths.expectedLocalPath;
 			} else {
-				ths.localPath = ths.calculateLocalPathFromUrl( ths.remoteUrl, ths.guessMime() );
+				ths.localPath = ths.getLocalPath();
 			}
 		}
 		if (different) {
@@ -142,10 +142,7 @@ Resource.prototype.overrideFromTmpFile = function () {
 		async.series([
 			function(cb){
 				let dirname = Path.dirname(ths.localPath);
-				FS.mkdir(dirname,function(err){
-					if (err && err.code === 'EEXIST') cb();
-					else cb(err);
-				});
+				CP.exec(`mkdir -p ${dirname}`,null,cb);
 			},
 			function(cb){
 				CP.exec(`mv ${ths.tempFile} ${ths.localPath}`,null,cb)
@@ -169,7 +166,7 @@ Resource.prototype.updateHtmlAttributes = function (tag, attributes) {
 			if (attributes.rel === 'canonical' && attributes.href) {
 				let absolute = this.makeUrlAbsolute( attributes.href, this.remoteUrl );
 				this.expectedLocalPath = this.calculateLocalPathFromUrl( absolute, 'text/html' );	//use canonical to override local path
-				attributes.href = this.calculateLocalUrl( this.expectedLocalPath, absolute );
+				return false;
 			}
 			if (attributes.rel === 'stylesheet' && attributes.href) {
 				attributes.href = this.processResourceLink( attributes.href, 'text/css' );
@@ -233,12 +230,18 @@ Resource.prototype.updateCssUrl = function (url) {
 Resource.prototype.processResourceLink = function (url, type, skipAdd) {
 	debug("processResourceLink",url,type);
 	let absolute = this.makeUrlAbsolute( url, this.getBaseUrl() );
-	let localFile = this.calculateLocalPathFromUrl( absolute, type );
-	let localUrl = this.calculateLocalUrl( localFile, absolute );
-	if (!skipAdd) {
-		this.parsedResources.add([ absolute, localFile, type ]);
+	let parsed = URL.parse( absolute, false, true );
+	if (this.project.filterByUrl( parsed )) {
+		let localFile = this.getLocalPath();
+		let linkFile = this.calculateLocalPathFromUrl( absolute, type );
+		let localUrl = this.calculateLocalUrl( linkFile, localFile );
+		if (!skipAdd) {
+			this.parsedResources.add([ absolute, localFile, type ]);
+		}
+		return localUrl;
+	} else {
+		return absolute;
 	}
-	return localUrl;
 };
 
 Resource.prototype.guessMime = function () {
@@ -276,6 +279,13 @@ Resource.prototype.getBaseUrl = function() {
 	return this.remoteUrl;
 };
 
+Resource.prototype.getLocalPath = function() {
+	if (!this._localPath) {
+		this._localPath = this.calculateLocalPathFromUrl( this.remoteUrl, this.guessMime() );
+	}
+	return this._localPath;
+};
+
 Resource.prototype.calculateLocalPathFromUrl = function ( url, mime ) {
 	let basePath = this.project.localPath;
 	let parsedUrl = URL.parse( url, true, true );
@@ -297,14 +307,15 @@ Resource.prototype.calculateLocalPathFromUrl = function ( url, mime ) {
 	return full;
 };
 
-Resource.prototype.calculateLocalUrl = function ( localFile, url ) {
-	let baseUrl = this.getBaseUrl();
-	let parsedUrl = URL.parse( url, false );
-	let search = parsedUrl.search ? parsedUrl.search : '';
-	let hash = parsedUrl.hash ? parsedUrl.hash : '';
-	let basePath = this.project.localPath;
-	debug("calc localUrl from "+JSON.stringify([baseUrl,basePath,localFile]));
-	return localFile.substr( basePath.length ) + search + hash;
+Resource.prototype.calculateLocalUrl = function ( link, base ) {
+	let linkParsed = URL.parse( link, false, false );
+	let baseParsed = URL.parse( base, false, false );
+	let relPath = Path.relative( Path.dirname(baseParsed.path), Path.dirname(linkParsed.path) );
+	let relLink = Path.join( relPath, Path.basename( linkParsed.path ) );
+	let search = linkParsed.search ? linkParsed.search : '';
+	let hash = linkParsed.hash ? linkParsed.hash : '';
+	debug("calc localUrl from "+JSON.stringify([link,base,relLink]));
+	return relLink + search + hash;
 };
 
 module.exports = Resource;
