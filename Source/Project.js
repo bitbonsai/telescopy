@@ -232,4 +232,16 @@ Project.prototype.printMemory = function() {
 	debug("STATS",[b,queue,done,skipped]);
 }
 
+Project.prototype.skipFile = function(filePath) {
+	if (!this.skipExistingFiles) return false;
+	console.log("skil check",filePath);
+	try {
+		FS.statSync(filePath);
+		return true;
+	} catch(e) {
+		if (e.code === 'ENOENT') return false;
+		else throw e;
+	}
+};
+
 module.exports = Project;

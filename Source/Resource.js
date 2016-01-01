@@ -1,6 +1,5 @@
 "use strict";
 const Util = require("./Util");
-const ParserHtml = require("html-parser");
 const DataStructures = require("datastructures-js");
 const URL = require("url");
 const FS = require("fs");
@@ -39,7 +38,7 @@ Resource.prototype.process = function () {
 				ths.remoteUrl = meta.finalUrl;	//in case of redirects
 				ths.remoteHeaders = meta.responseHeaders;
 				if (meta.status >= 400) {
-					debug("WARN 404");
+					debug("WARN "+meta.status);
 					reject(meta);
 				} else {
 					resolve(fetchStream);
@@ -227,7 +226,7 @@ Resource.prototype.updateCssUrl = function (url) {
  * @param string type
  * @return string local url
  **/
-Resource.prototype.processResourceLink = function (url, type, skipAdd) {
+Resource.prototype.processResourceLink = function (url, type) {
 	debug("processResourceLink",url,type);
 	let absolute = this.makeUrlAbsolute( url, this.getBaseUrl() );
 	let parsed = URL.parse( absolute, false, true );
@@ -235,7 +234,7 @@ Resource.prototype.processResourceLink = function (url, type, skipAdd) {
 		let localFile = this.getLocalPath();
 		let linkFile = this.calculateLocalPathFromUrl( absolute, type );
 		let localUrl = this.calculateLocalUrl( linkFile, localFile );
-		if (!skipAdd) {
+		if (this.project.skipFile( linkFile ) === false) {
 			this.parsedResources.add([ absolute, localFile, type ]);
 		}
 		return localUrl;
