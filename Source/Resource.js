@@ -1,6 +1,5 @@
 "use strict";
 const Util = require("./Util");
-const DataStructures = require("datastructures-js");
 const URL = require("url");
 const FS = require("fs");
 const mime = require("mime");

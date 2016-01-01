@@ -1,5 +1,5 @@
 "use strict";
-const DataStructures = require("datastructures-js");
+const Dequeue = require("dequeue");
 const Resource = require("./Resource");
 const debug = require("debug")("tcopy-project");
 const FS = require("fs");
@@ -44,7 +44,7 @@ function Project(options) {
 	this.id = '';
 	this.running = false;
 
-	this.queue = DataStructures.queue();
+	this.queue = new Dequeue();
 	this.resourcesByUrl = new Map();
 	this.downloadedUrls = new Set();
 	this.skippedUrls = new Set();
@@ -78,7 +78,7 @@ Project.prototype.start = function() {
 	p.then(function(){
 		let res = ths.getResourceByUrl( ths.httpEntry );
 		res.expectedMime = 'text/html';
-		ths.queue.enqueue( res );
+		ths.queue.push( res );
 		ths.processNext();
 	}).catch(function(err){
 		console.log("error starting project",err,err.stack.split("\n"));
@@ -86,7 +86,7 @@ Project.prototype.start = function() {
 };
 
 Project.prototype.processNext = function() {
-	var res = this.queue.dequeue();
+	var res = this.queue.shift();
 	if (!res || this.running === false) {
 		this.running = false;
 		return this.finish(true);
@@ -120,24 +120,6 @@ Project.prototype.finish = function(finished) {
 	}
 	this.httpAgent.destroy();
 	this.httpsAgent.destroy();
-};
-
-
-Project.prototype.parseResourceForMoreResources = function( res ) {
-	var ths = this;
-	return res.parse()
-	.then(function(){
-		res.parsed.forEach(function(entry){
-			let uri = entry[0],
-				type = entry[1];
-			if (ths.isUrlProcessed( uri )) {
-				return;
-			}
-			var res = ths.getResourceByUrl( uri );
-			ths.queue.push( res );
-		});
-		return res;
-	});
 };
 
 Project.prototype.saveResourceLocally = function( res ) {
@@ -179,7 +161,7 @@ Project.prototype.addResourceUrls = function(set) {
 		let res = ths.getResourceByUrl(url);
 		res.expectedMime = entry[2];
 		//res.expectedLocalPath = entry[1];
-		ths.queue.enqueue(res);
+		ths.queue.push(res);
 		ths.queuedUrls.add(url);
 		added += 1;
 	});
@@ -226,7 +208,7 @@ Project.prototype.printMemory = function() {
 	for (let i=b.length-3; i>0; i-=3) {
 		b = b.substr(0,i)+"."+b.substr(i);
 	}
-	let queue = this.queue.length();
+	let queue = this.queue.length;
 	let done = this.downloadedUrls.size;
 	let skipped = this.skippedUrls.size;
 	debug("STATS",[b,queue,done,skipped]);
