@@ -19,6 +19,9 @@ function Project(options) {
 	this.tempDir = options.tempDir || '/tmp/telescopy';
 	this.skipExistingFiles = options.skipExistingFiles;
 	this.onFinish = options.onFinish;
+	this.maxRetries = options.maxRetries || 3;
+	this.timeoutToHeaders = options.timeoutToHeaders || 6000;
+	this.timeoutToDownload = options.timeoutToDownload || 12000;
 
 	if (options.filterByUrl) {
 		this.filterByUrl = options.filterByUrl;
@@ -101,9 +104,13 @@ Project.prototype.processNext = function() {
 		ths.queuedUrls.delete( res.remoteUrl );
 		process.nextTick( ths.next );
 	},function(err){
-		console.log("skipped resource for error",err,err.stack.split("\n"));
-		ths.skippedUrls.add( res.remoteUrl );
-		ths.queuedUrls.delete( res.remoteUrl );
+		debug("skipped resource for error",err, err.stack ? err.stack.split("\n") : '');
+		if (err === "timeout" && ++res.retries < ths.maxRetries) {
+			ths.queue.push( res );
+		} else {
+			ths.skippedUrls.add( res.remoteUrl );
+			ths.queuedUrls.delete( res.remoteUrl );
+		}
 		process.nextTick( ths.next );
 	});
 };

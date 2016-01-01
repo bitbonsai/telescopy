@@ -25,13 +25,15 @@ function Resource() {
 	this.baseUrl = '';
 	this.expectedMime = '';
 	this.expectedLocalPath = '';	//from canonical url
+	this.retries = 0;
 }
 
 Resource.prototype.process = function () {
 	var ths = this;
-	var p = Promise.resolve(ths.project.fetch( this.remoteUrl ));
-	p = p.then(function(fetchStream){
+	return Promise.resolve(ths.project.fetch( this.remoteUrl ))
+	.then(function(fetchStream){
 		return new Promise(function(resolve, reject) {
+			var timer;
 			fetchStream.on("meta",function(meta){
 				debug("meta",meta);
 				ths.remoteUrl = meta.finalUrl;	//in case of redirects
@@ -42,10 +44,14 @@ Resource.prototype.process = function () {
 				} else {
 					resolve(fetchStream);
 				}
+				clearTimeout( timer );
 			});
 			fetchStream.on("error",reject);
+			timer = setTimeout(function(){
+				fetchStream.emit("error","timeout");
+				fetchStream.destroy();
+			},ths.project.timeoutToHeaders);
 		});
-
 	}).then(function(fetchStream){
 		if (ths.localPath && ths.project.skipExistingFiles) {	//we already have a local copy
 			return true;
@@ -57,10 +63,6 @@ Resource.prototype.process = function () {
 		} else {
 			return true;
 		}
-	},function(err){
-		debug("unable to download",err);
-		//delete local file?
-		return false;
 	}).then(function(different){
 		if (!ths.localPath) {
 			if (ths.expectedLocalPath) {
@@ -74,12 +76,12 @@ Resource.prototype.process = function () {
 			return ths.overrideFromTmpFile();
 		}
 	});
-	return p;
 };
 
 Resource.prototype.download = function(fetchStream) {
 	var ths = this;
 	return new Promise(function(resolve, reject) {
+		var timer;
 		if (!ths.remoteUrl) {
 			return reject("cannot download, no remote url");
 		}
@@ -111,8 +113,17 @@ Resource.prototype.download = function(fetchStream) {
 		fetchStream
 			.pipe( transformStream )
 			.pipe( saveStream );
-		transformStream.on("end", resolve);
+			
+		transformStream.on("end", function(){
+			clearTimeout(timer);
+			resolve();
+		});
+		fetchStream.on("error",reject);
 		fetchStream.resume();
+		timer = setTimeout(function(){
+			fetchStream.emit("error","timeout");
+			fetchStream.destroy();
+		},ths.project.timeoutToDownload);
 	});
 };
 
@@ -244,7 +255,7 @@ Resource.prototype.processResourceLink = function (url, type) {
 
 Resource.prototype.guessMime = function () {
 	let fromUrl = mime.lookup( this.remoteUrl );
-	let type = this.remoteHeaders['content-type'];
+	let type = this.remoteHeaders ? this.remoteHeaders['content-type'] : null;
 	if (type) {
 		let cpos = type.indexOf(";");
 		if (cpos) {
