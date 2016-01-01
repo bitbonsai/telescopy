@@ -76,6 +76,7 @@ Project.prototype.start = function() {
 	}
 	p = p.then(this.prepareLocalDirectories.bind(this));
 	p.then(function(){
+		if (!ths.httpEntry) return;
 		let res = ths.getResourceByUrl( ths.httpEntry );
 		res.expectedMime = 'text/html';
 		ths.queue.push( res );
@@ -97,10 +98,12 @@ Project.prototype.processNext = function() {
 	res.process()
 	.then(function(){
 		ths.downloadedUrls.add( res.remoteUrl );
+		ths.queuedUrls.delete( res.remoteUrl );
 		process.nextTick( ths.next );
 	},function(err){
 		console.log("skipped resource for error",err,err.stack.split("\n"));
 		ths.skippedUrls.add( res.remoteUrl );
+		ths.queuedUrls.delete( res.remoteUrl );
 		process.nextTick( ths.next );
 	});
 };
@@ -120,6 +123,18 @@ Project.prototype.finish = function(finished) {
 	}
 	this.httpAgent.destroy();
 	this.httpsAgent.destroy();
+};
+
+Project.prototype.addUrl = function(url, mime) {
+	if (this.isUrlQueued(url)) return false;
+	let res = this.getResourceByUrl(url);
+	if (mime) res.expectedMime = mime;
+	this.queue.push(res);
+	this.queuedUrls.add(url);
+	if (!this.running) {
+		this.processNext();
+	}
+	return true;
 };
 
 Project.prototype.saveResourceLocally = function( res ) {

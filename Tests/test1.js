@@ -35,6 +35,9 @@ var runTest = function(){
 		onFinish : finish
 	});
 	project.start();
+	setTimeout(function(){
+		project.addUrl('http://localhost:8080/contact3.html');
+	},500);
 };
 
 prepare();
