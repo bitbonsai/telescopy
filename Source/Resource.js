@@ -16,6 +16,7 @@ const Crypto = require("crypto");
 function Resource() {
 	this.project = null;
 	this.remoteUrl = '';
+	this.originalUrl = '';
 	this.localPath = '';
 	this.tempFile = '';
 	this.downloaded = false;
@@ -36,8 +37,19 @@ Resource.prototype.process = function () {
 			var timer;
 			fetchStream.on("meta",function(meta){
 				debug("meta",meta);
-				ths.remoteUrl = meta.finalUrl;	//in case of redirects
 				ths.remoteHeaders = meta.responseHeaders;
+				if (ths.remoteUrl !== meta.finalUrl) {
+					if (ths.project.linkRedirects) {
+						let mime = ths.guessMime();
+						let linkFrom = ths.calculateLocalPathFromUrl( ths.remoteUrl, mime );
+						let linkTo = ths.calculateLocalPathFromUrl( meta.finalUrl, mime );
+						ths.project.createSymlink( linkFrom, linkTo );
+						ths.originalUrl = ths.remoteUrl;
+						ths.remoteUrl = meta.finalUrl;
+						ths.project.resourcesByUrl.set( meta.finalUrl, ths );
+						ths.project.queuedUrls.add( meta.finalUrl );
+					}
+				}
 				if (meta.status >= 400) {
 					debug("WARN "+meta.status);
 					reject(meta);
@@ -113,7 +125,7 @@ Resource.prototype.download = function(fetchStream) {
 		fetchStream
 			.pipe( transformStream )
 			.pipe( saveStream );
-			
+
 		transformStream.on("end", function(){
 			clearTimeout(timer);
 			resolve();

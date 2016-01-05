@@ -22,6 +22,7 @@ function Project(options) {
 	this.maxRetries = options.maxRetries || 3;
 	this.timeoutToHeaders = options.timeoutToHeaders || 6000;
 	this.timeoutToDownload = options.timeoutToDownload || 12000;
+	this.linkRedirects = options.linkRedirects || false;
 
 	if (options.filterByUrl) {
 		this.filterByUrl = options.filterByUrl;
@@ -73,7 +74,7 @@ Project.prototype.start = function() {
 	}
 	var ths = this;
 	this.running = true;
-	var p = Promise.resolve(1);
+	var p = Promise.resolve();
 	if (this.cleanLocal) {
 		p = p.then(this.cleanLocalFiles.bind(this));
 	}
@@ -100,16 +101,24 @@ Project.prototype.processNext = function() {
 	var ths = this;
 	res.process()
 	.then(function(){
-		ths.downloadedUrls.add( res.remoteUrl );
 		ths.queuedUrls.delete( res.remoteUrl );
+		ths.downloadedUrls.add( res.remoteUrl );
+		if (res.originalUrl) {
+			ths.queuedUrls.delete( res.originalUrl );
+			ths.downloadedUrls.add( res.originalUrl );
+		}
 		process.nextTick( ths.next );
 	},function(err){
 		debug("skipped resource for error",err, err.stack ? err.stack.split("\n") : '');
 		if (err === "timeout" && ++res.retries < ths.maxRetries) {
 			ths.queue.push( res );
 		} else {
-			ths.skippedUrls.add( res.remoteUrl );
 			ths.queuedUrls.delete( res.remoteUrl );
+			ths.skippedUrls.add( res.remoteUrl );
+			if (res.originalUrl) {
+				ths.queuedUrls.delete( res.originalUrl );
+				ths.skippedUrls.add( res.originalUrl );
+			}
 		}
 		process.nextTick( ths.next );
 	});
@@ -246,6 +255,13 @@ Project.prototype.skipFile = function(filePath) {
 		if (e.code === 'ENOENT') return false;
 		else throw e;
 	}
+};
+
+Project.prototype.createSymlink = function(from, to) {
+	let path = Path.relative(from, to);
+	FS.symlink(target,path,function(err){
+		console.log("unable to create symlink!",from,path);
+	});
 };
 
 module.exports = Project;
