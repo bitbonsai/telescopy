@@ -10,6 +10,7 @@ const Fetch = require("fetch");
 const HTTP = require("http");
 const HTTPS = require("https");
 const URL = require("url");
+const Filter = require("./Filter");
 
 function Project(options) {
 
@@ -29,7 +30,8 @@ function Project(options) {
 	if (options.filterByUrl) {
 		this.filterByUrl = options.filterByUrl;
 	} else if (options.urlFilter) {
-		//@TODO implement
+		this.urlFilter = new Filter(options.urlFilter);
+        this.filterByUrl = this.urlFilter.run.bind( this.urlFilter );
 	} else {
 		var entryHost = URL.parse( this.httpEntry, false, true ).host;
 		this.filterByUrl = function(urlParts) {
