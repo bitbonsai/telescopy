@@ -23,6 +23,8 @@ function Project(options) {
 	this.timeoutToHeaders = options.timeoutToHeaders || 6000;
 	this.timeoutToDownload = options.timeoutToDownload || 12000;
 	this.linkRedirects = options.linkRedirects || false;
+	this.defaultIndex = options.defaultIndex || 'index';
+	this.userAgent = options.useragent || 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1';
 
 	if (options.filterByUrl) {
 		this.filterByUrl = options.filterByUrl;
@@ -35,7 +37,6 @@ function Project(options) {
 		};
 	}
 
-	this.userAgent = options.useragent || 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1';
 	this.agentOptions = {
 		keepAlive : true,
 		keepAliveMsecs : 3000,
@@ -94,7 +95,7 @@ Project.prototype.processNext = function() {
 	var res = this.queue.shift();
 	if (!res || this.running === false) {
 		this.running = false;
-		return this.finish(true);
+		return this.finish( !!res );
 	}
 	debug("now processing",res.remoteUrl);
 	this.printMemory();
@@ -129,7 +130,6 @@ Project.prototype.stop = function() {
 		throw new Error("Project not running");
 	}
 	this.running = false;
-	this.finish(false);
 };
 
 Project.prototype.finish = function(finished) {
@@ -164,14 +164,14 @@ Project.prototype.isUrlProcessed = function( url ) {
 };
 
 Project.prototype.getResourceByUrl = function(url, parent) {
-	if (this.resourcesByUrl.has(url)) {
+	/*if (this.resourcesByUrl.has(url)) {
 		return this.resourcesByUrl.get(url);
-	}
+	}*/
 	let res = new Resource();
 	res.remoteUrl = url;
 	res.parentResource = parent;
 	res.project = this;
-	this.resourcesByUrl.set( url, res );
+	//this.resourcesByUrl.set( url, res );
 	return res;
 };
 
@@ -186,7 +186,7 @@ Project.prototype.addResourceUrls = function(set) {
 	var ths = this;
 	var added = 0;
 	set.forEach(function(entry){
-		let url = entry[0];
+		let url = ths.normalizeUrl( entry[0] );
 		if (ths.isUrlQueued(url) || ths.isUrlProcessed(url)) return;
 		debug("adding url",url);
 		let res = ths.getResourceByUrl(url);
@@ -262,6 +262,16 @@ Project.prototype.createSymlink = function(from, to) {
 	FS.symlink(target,path,function(err){
 		console.log("unable to create symlink!",from,path);
 	});
+};
+
+Project.prototype.normalizeUrl = function (url) {
+	if (typeof url.length !== 'undefined') {
+		url = URL.parse( url, false, false );
+	}
+	if (url.hash) {
+		url.hash = '';
+	}
+	return URL.format(url);
 };
 
 module.exports = Project;

@@ -251,7 +251,7 @@ Resource.prototype.updateCssUrl = function (url) {
 Resource.prototype.processResourceLink = function (url, type) {
 	debug("processResourceLink",url,type);
 	let absolute = this.makeUrlAbsolute( url, this.getBaseUrl() );
-	let parsed = URL.parse( absolute, false, true );
+	let parsed = URL.parse( absolute, true, false );
 	if (this.project.filterByUrl( parsed )) {
 		let localFile = this.getLocalPath();
 		let linkFile = this.calculateLocalPathFromUrl( absolute, type );
@@ -309,14 +309,18 @@ Resource.prototype.getLocalPath = function() {
 
 Resource.prototype.calculateLocalPathFromUrl = function ( url, mime ) {
 	let basePath = this.project.localPath;
-	let parsedUrl = URL.parse( url, true, true );
+	let parsedUrl = URL.parse( url, true, false );
 	var queryString = '';
 	if (parsedUrl.search) {	//add query as base64
 		queryString = new Buffer(parsedUrl.search).toString("base64");
 	}
 	let ext = MIME.extension( mime );
 	let ending = "." + (ext ? ext : 'html');
-	let path = parsedUrl.pathname && parsedUrl.pathname.length > 1 ? parsedUrl.pathname : 'index';
+	let path = parsedUrl.pathname && parsedUrl.pathname.length > 1
+				? parsedUrl.pathname : '/';
+	if (path[path.length - 1] === '/') {
+		path += this.project.defaultIndex;
+	}
 	let pathExt = Path.extname(path);
 	if (pathExt) {
 		path = path.substr(0, path.length - pathExt.length);
