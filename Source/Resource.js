@@ -302,6 +302,12 @@ Resource.prototype.updateHtmlAttributes = function (tag, attributes) {
 				});
 			}
 		break;
+
+		case 'option':
+			if (attributes.value && attributes.value.match(/https?\:/)) {
+				attributes.value = this.processResourceLink( attributes.value, 'text/html' );
+			}
+		break;
 	}
 	return attributes;
 };
