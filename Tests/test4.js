@@ -56,8 +56,13 @@ var runTest = function(){
 		local : mirror,
 		cleanLocal : true,
 		tempDir : temp,
-		onFinish : finish,
+		onFinish : function(){
+			console.log( project.getUrlStats() );
+			console.log( project.getUrlFilterAnalysis() );
+			finish();
+		},
 		timeoutToHeaders : 500,
+		linkRedirects : true,
 		maxRetries : 3
 	});
 	project.start();

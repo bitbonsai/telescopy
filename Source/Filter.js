@@ -47,7 +47,7 @@ const buildFilter = function( filter ) {
                 fnBody += `let testResult = (1*value ${comp} 1*${filter.value});\n`;
             }
         } else {
-            fnBody += `let testResult = !!value;\n`;
+            fnBody += `let testResult = true;\n`;
         }
     }
     if (typeof filter.match !== 'undefined') {

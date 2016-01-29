@@ -3,6 +3,7 @@ const Dequeue = require("dequeue");
 const Resource = require("./Resource");
 const debug = require("debug")("tcopy-project");
 const FS = require("fs");
+const rimraf = require("rimraf");
 const async = require("async");
 const Path = require("path");
 const CP = require("child_process");
@@ -18,7 +19,7 @@ function Project(options) {
 	this.httpEntry = options.remote;
 	this.cleanLocal = options.cleanLocal || false;
 	this.tempDir = options.tempDir || '/tmp/telescopy';
-	this.skipExistingFiles = options.skipExistingFiles;
+	this.skipExistingFiles = options.skipExistingFiles || false;
 	this.onFinish = options.onFinish;
 	this.maxRetries = options.maxRetries || 3;
 	this.timeoutToHeaders = options.timeoutToHeaders || 6000;
@@ -52,10 +53,8 @@ function Project(options) {
 	this.running = false;
 
 	this.queue = new Dequeue();
-	this.resourcesByUrl = new Map();
-	this.downloadedUrls = new Set();
-	this.skippedUrls = new Set();
-	this.queuedUrls = new Set();
+
+	this.urls = new Map();
 
 	this.next = this.processNext.bind(this);
 }
@@ -64,7 +63,8 @@ Project.prototype.fetch = function(url) {
 	let https = url.substr(0,6) === 'https:';
 	let stream = new Fetch.FetchStream(url,{
 		userAgent : this.userAgent,
-		agent : https ? this.httpsAgent : this.httpAgent,
+		httpAgent : this.httpAgent,
+        httpsAgent : this.httpsAgent,
 		encoding : ''
 	});
 	stream.pause();
@@ -99,32 +99,37 @@ Project.prototype.processNext = function() {
 		this.running = false;
 		return this.finish( !!res );
 	}
-	debug("now processing",res.remoteUrl);
-	this.printMemory();
+	debug("now processing",res.linkedUrl);
 	var ths = this;
 	res.process()
 	.then(function(){
-		ths.queuedUrls.delete( res.remoteUrl );
-		ths.downloadedUrls.add( res.remoteUrl );
-		if (res.originalUrl) {
-			ths.queuedUrls.delete( res.originalUrl );
-			ths.downloadedUrls.add( res.originalUrl );
-		}
+		ths.finishResource( res );
 		process.nextTick( ths.next );
 	},function(err){
-		debug("skipped resource for error",err, err.stack ? err.stack.split("\n") : '');
-		if (err === "timeout" && ++res.retries < ths.maxRetries) {
-			ths.queue.push( res );
-		} else {
-			ths.queuedUrls.delete( res.remoteUrl );
-			ths.skippedUrls.add( res.remoteUrl );
-			if (res.originalUrl) {
-				ths.queuedUrls.delete( res.originalUrl );
-				ths.skippedUrls.add( res.originalUrl );
-			}
-		}
+		ths.finishResource( res, err );
 		process.nextTick( ths.next );
 	});
+};
+
+Project.prototype.finishResource = function (res, err) {
+	if (!err) {
+		res.getUrls().forEach(function(url){
+			let obj = this.getUrlObj(url);
+			obj.queued = false;
+			obj.downloaded = true;
+		}.bind(this));
+	} else {
+		debug("skipped resource for error",err, err.stack ? err.stack.split("\n") : '');
+		if (err === "timeout" && ++res.retries < ths.maxRetries) {
+			this.queue.push( res );
+		} else {
+			res.getUrls().forEach(function(url){
+				let obj = this.getUrlObj(url);
+				obj.queued = false;
+				obj.skipped = true;
+			}.bind(this));
+		}
+	}
 };
 
 Project.prototype.stop = function() {
@@ -148,7 +153,7 @@ Project.prototype.addUrl = function(url, mime) {
 	let res = this.getResourceByUrl(url);
 	if (mime) res.expectedMime = mime;
 	this.queue.push(res);
-	this.queuedUrls.add(url);
+	this.getUrlObj(url).queued = true;
 	if (!this.running) {
 		this.processNext();
 	}
@@ -156,24 +161,20 @@ Project.prototype.addUrl = function(url, mime) {
 };
 
 Project.prototype.saveResourceLocally = function( res ) {
-	var localPath = this.getLocalPath( res.remoteUrl );
+	var localPath = this.getLocalPath( res.linkedUrl );
 	return res;
 };
 
 Project.prototype.isUrlProcessed = function( url ) {
-	return this.downloadedUrls.has( url )
-		|| this.skippedUrls.has( url );
+	let obj = this.getUrlObj(url);
+	return obj.downloaded || obj.skipped;
 };
 
 Project.prototype.getResourceByUrl = function(url, parent) {
-	/*if (this.resourcesByUrl.has(url)) {
-		return this.resourcesByUrl.get(url);
-	}*/
 	let res = new Resource();
-	res.remoteUrl = url;
+	res.linkedUrl = url;
 	res.parentResource = parent;
 	res.project = this;
-	//this.resourcesByUrl.set( url, res );
 	return res;
 };
 
@@ -193,25 +194,26 @@ Project.prototype.addResourceUrls = function(set) {
 		debug("adding url",url);
 		let res = ths.getResourceByUrl(url);
 		res.expectedMime = entry[2];
-		//res.expectedLocalPath = entry[1];
+		res.expectedLocalPath = entry[1];
 		ths.queue.push(res);
-		ths.queuedUrls.add(url);
+		ths.getUrlObj(url).queued = true;
 		added += 1;
 	});
 	debug( "added %s / %s resource urls", added, set.size );
 };
 
 Project.prototype.isUrlQueued = function(url) {
-	return this.queuedUrls.has(url);
+	return this.getUrlObj(url).queued;
 };
 
 Project.prototype.cleanLocalFiles = function() {
 	var ths = this;
 	return new Promise(function(resolve, reject) {
-		CP.exec("rm -rf "+ths.localPath,function(err){
-			if (err) reject(err);
-			else resolve();
-		});
+        var error = false;
+        rimraf(ths.localPath,function(err){
+            if (err) reject(err);
+            else resolve();
+        });
 	});
 };
 
@@ -241,15 +243,56 @@ Project.prototype.printMemory = function() {
 	for (let i=b.length-3; i>0; i-=3) {
 		b = b.substr(0,i)+"."+b.substr(i);
 	}
-	let queue = this.queue.length;
-	let done = this.downloadedUrls.size;
-	let skipped = this.skippedUrls.size;
-	debug("STATS",[b,queue,done,skipped]);
+	debug("STATS",b,this.queue.length);
 }
+
+Project.prototype.getUrlStats = function(){
+	var stats = {
+		allowed : 0,
+		denied : 0,
+		skipped : 0,
+		downloaded : 0,
+		queued : 0
+	}
+	this.urls.forEach(function(obj,url){
+		if (obj.allowed === true) stats.allowed += 1;
+		else if(obj.asked > 0) stats.denied += 1;
+		if (obj.queued) stats.queued += 1;
+		else if (obj.skipped) stats.skipped += 1;
+		else stats.downloaded += 1;
+		if (obj.queued && obj.downloaded || obj.queued && obj.skipped || obj.skipped && obj.downloaded) {
+			console.log("WARNING, invalid url obj: "+JSON.stringify( obj ));
+		}
+	});
+	return stats;
+};
+
+Project.prototype.getUrlFilterAnalysis = function(){
+	var allowedUrls = [];
+	var deniedUrls = [];
+	this.urls.forEach(function(obj,url){
+		if (obj.asked === 0) return;
+		if (obj.allowed) {
+			allowedUrls.push([url,obj.asked]);
+		} else {
+			deniedUrls.push([url,obj.asked]);
+		}
+	});
+	var sort = function(a,b){
+		if (a[1] > b[1]) return -1;
+		if (a[1] < b[1]) return 1;
+		return 0;
+	}
+	allowedUrls = allowedUrls.sort(sort);
+	deniedUrls = deniedUrls.sort(sort);
+	return {
+		allowed : allowedUrls,
+		denied : deniedUrls
+	};
+};
 
 Project.prototype.skipFile = function(filePath) {
 	if (!this.skipExistingFiles) return false;
-	console.log("skil check",filePath);
 	try {
 		FS.statSync(filePath);
 		return true;
@@ -260,9 +303,12 @@ Project.prototype.skipFile = function(filePath) {
 };
 
 Project.prototype.createSymlink = function(from, to) {
-	let path = Path.relative(from, to);
-	FS.symlink(target,path,function(err){
-		console.log("unable to create symlink!",from,path);
+	let path = Path.relative( Path.dirname(from), to);
+	debug("symlinking "+from+" => "+path);
+	FS.symlink(path,from,function(err){
+		if (err) {
+			console.log("unable to create symlink!",from,path,err);
+		}
 	});
 };
 
@@ -274,6 +320,32 @@ Project.prototype.normalizeUrl = function (url) {
 		url.hash = '';
 	}
 	return URL.format(url);
+};
+
+Project.prototype.getUrlObj = function (url) {
+	if (!this.urls.has(url)) {
+		var obj = {
+			allowed : false,
+			asked : 0,
+			skipped : false,
+			downloaded : false,
+			queued : false
+		};
+		this.urls.set(url,obj);
+		return obj;
+	} else {
+		return this.urls.get(url);
+	}
+};
+
+Project.prototype.queryUrlFilter = function( url ){
+	let obj = this.getUrlObj(url);
+	if (obj.asked === 0) {
+		let parsed = URL.parse( url, true, false );
+		obj.allowed = this.filterByUrl( parsed );
+	}
+	obj.asked += 1;
+	return obj.allowed;
 };
 
 module.exports = Project;
