@@ -1,6 +1,6 @@
 # telesCOPY
 
-**Status: ALPHA**
+**Status: BETA**
 
 A horribly named website mirroring package. I wrote it because I found using wget to be severly limiting. This addresses the following issues:
 
@@ -9,9 +9,6 @@ A horribly named website mirroring package. I wrote it because I found using wge
  * able to cancel and still use what has been downloaded so far (wget only converts links at the end, not done when canceled)
  * allows for re-download of single resources
 
-## Compatability
-
- * Linux only so far
 
 ## Usage
 
@@ -80,19 +77,36 @@ Declarative filter list, in order of execution. Each filter can have these attri
 
 ### API
 
-The public API methods on a project.
+The public API methods. Use other methods with care.
 
-#### .start()
+#### Telescopy.newProject(options)
+Creates a new project.
+
+#### project.start()
 Starts the procedure
 
-#### .stop()
+#### project.stop()
 Stops the procedure. After finishing the current resource.
 .onFinish(false) will be called.
 
-#### .addUrl(url)
+#### project.addUrl(url)
 Adds a single URL to the queue. Will start the procedure, if it is not already running.
 Returns true, if the URL was added. Will not add the URL if it is already queued or has already been processed.
 
+#### project.getUrlStats()
+Compiles a quick update on the progress of the project.
+Returns an object with:
+ * allowed - number of urls allowed by the filter
+ * denied - number of urls denies by the filter
+ * skipped - number of resources skipped because of errors
+ * downloaded - number of urls downloaded (is bigger than allowed because it contains redirected urls and canonical urls)
+ * queued - number of urls queued to download
+
+#### project.getUrlFilterAnalysis()
+Compile a complete analysis of the url filter.
+Returns an object with allowedUrls[] and deniedUrls[].
+Each entry containing the URL itself and the number of times it was referenced, sorted decending.
+This helps in improving the filter settings.
 
 
 ## Examples
@@ -102,5 +116,12 @@ Returns true, if the URL was added. Will not add the URL if it is already queued
 
 ## TODO
 
- * declarative filtering options
- * update options while running
+ * improve options to updat existing mirror
+ * allow parsing of inline styles
+ * allow hooking new html parser functions and disabling default ones
+ * hide/avoid error when symlink already exists
+ * stats: add count of existing files and keep updated
+ * find better way to compress querystring than base64 (must be predictable)
+ * export and import settings to folder and do not delete on cleanLocal, then allow loading project from local path alone
+ 
+
