@@ -46,7 +46,10 @@ var stage2 = function(){
 		cleanLocal : false,
 		tempDir : temp,
 		onFinish : cleanup2,
-		skipExistingFiles : true
+		skipExistingFiles : true,
+		skipExistingFilesExclusion : {
+			'text/html' : true
+		}
 	});
 	project.start();
 };

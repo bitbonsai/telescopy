@@ -30,6 +30,7 @@ function Project(options) {
 	this.cleanLocal = options.cleanLocal || false;
 	this.tempDir = options.tempDir || '/tmp/telescopy';
 	this.skipExistingFiles = options.skipExistingFiles || false;
+	this.skipExistingFilesExclusion = options.skipExistingFilesExclusion || null;
 	this.onFinish = options.onFinish;
 	this.maxRetries = options.maxRetries || 3;
 	this.timeoutToHeaders = options.timeoutToHeaders || 6000;
@@ -313,6 +314,11 @@ Project.prototype.getUrlFilterAnalysis = function(){
 
 Project.prototype.skipFile = function(filePath) {
 	if (!this.skipExistingFiles) return false;
+	if (this.skipExistingFilesExclusion) {
+		let fileExt = Path.extname( filePath );
+		let mime = MIME.lookup( fileExt );
+		if (this.skipExistingFilesExclusion[mime]) return false;
+	}
 	try {
 		FS.statSync(filePath);
 		return true;
@@ -326,10 +332,13 @@ Project.prototype.createSymlink = function(from, to) {
 	if (from === to) return;
 	let path = Path.relative( Path.dirname(from), to);
 	debug("symlinking "+from+" => "+path);
-	FS.symlink(path,from,function(err){
-		if (err) {
-			console.log("unable to create symlink!",from,path,err);
-		}
+	FS.lstat(filePath, function(err){
+		if (!err) return;
+		FS.symlink(path,from,function(err){
+			if (err) {
+				console.log("unable to create symlink!",from,path,err);
+			}
+		});
 	});
 };
 

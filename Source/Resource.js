@@ -233,11 +233,11 @@ Resource.prototype.overrideFromTmpFile = function(){
 Resource.prototype.processResourceLink = function (url, type) {
 	//debug("processResourceLink",url,type);
 	let absolute = this.makeUrlAbsolute( url );
-	if (this.project.queryUrlFilter( absolute )) {
+	if (this.project.queryUrlFilter( absolute )) {	//link to local or remote
 		let localFile = this.getLocalPath();
 		let linkFile = this.calculateLocalPathFromUrl( absolute, type );
 		let localUrl = this.calculateLocalUrl( linkFile, localFile );
-		if (this.project.skipFile( linkFile ) === false) {
+		if (this.project.skipFile( linkFile ) === false) {	//queue or skip
 			this.parsedResources.add([ absolute, linkFile, type ]);
 		}
 		return localUrl;
