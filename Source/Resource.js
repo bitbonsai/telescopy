@@ -231,7 +231,7 @@ Resource.prototype.overrideFromTmpFile = function(){
  * @return string local url
  **/
 Resource.prototype.processResourceLink = function (url, type) {
-	debug("processResourceLink",url,type);
+	//debug("processResourceLink",url,type);
 	let absolute = this.makeUrlAbsolute( url );
 	if (this.project.queryUrlFilter( absolute )) {
 		let localFile = this.getLocalPath();
@@ -247,31 +247,21 @@ Resource.prototype.processResourceLink = function (url, type) {
 };
 
 Resource.prototype.guessMime = function () {
+	if (this.expectedMime) return this.expectedMime;
 	let fromUrl = mime.lookup( this.linkedUrl );
-	let type = this.remoteHeaders ? this.remoteHeaders['content-type'] : null;
-	if (type) {
-		let cpos = type.indexOf(";");
+	let fromHeader = this.remoteHeaders ? this.remoteHeaders['content-type'] : null;
+	if (fromHeader) {
+		let cpos = fromHeader.indexOf(";");
 		if (cpos) {
-			type = type.substring(0,cpos);
+			fromHeader = fromHeader.substring(0,cpos);
 		}
 	}
-	debug( "guessingMime", [this.expectedMime, fromUrl, type] );
-	if (this.expectedMime) {
-		let reg = new RegExp(this.expectedMime,"i");
-		if (reg.test(fromUrl)) {
-			return fromUrl;
-		}
-		if (reg.test(type)) {
-			return type;
-		}
-		return this.expectedMime;
-	}
-	return type ? type : fromUrl;
+	return Util.guessMime( fromHeader, fromUrl );
 };
 
 Resource.prototype.makeUrlAbsolute = function( url ) {
 	let baseUrl = this.getBaseUrl();
-	debug("make absolute",baseUrl,url);
+	//debug("make absolute",baseUrl,url);
 	return URL.resolve( baseUrl, url );
 };
 
@@ -279,6 +269,7 @@ Resource.prototype.getLocalPath = function() {
 	if (!this._localPath) {
 		this._localPath = this.expectedLocalPath ? this.expectedLocalPath
 				: this.calculateLocalPathFromUrl( this.linkedUrl, this.guessMime() );
+		debug("calculate local path: "+this._localPath);
 	}
 	return this._localPath;
 };
@@ -307,7 +298,7 @@ Resource.prototype.calculateLocalPathFromUrl = function ( url, mime ) {
 	path += queryString;
 	path += ending;
 	let full = Path.join( basePath, parsedUrl.hostname, path);
-	debug("calculated local path to be "+full);
+	//debug("calculated local path to be "+full);
 	return full;
 };
 
@@ -321,7 +312,7 @@ Resource.prototype.calculateLocalUrl = function ( link, base ) {
 	let relLink = Path.join( relPath, Path.basename( linkParsed.path ) );
 	let search = linkParsed.search ? linkParsed.search : '';
 	let hash = linkParsed.hash ? linkParsed.hash : '';
-	debug("calc localUrl from "+JSON.stringify([link,base,relLink]));
+	//debug("calc localUrl from "+JSON.stringify([link,base,relLink]));
 	return relLink + search + hash;
 };
 

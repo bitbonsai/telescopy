@@ -7,7 +7,7 @@ methods.updateAttributes = function (args) {
 	switch (args.tag) {
 		case 'a':
 			if (attributes.href) {
-				attributes.href = this.processResourceLink( attributes.href, 'text/html' );
+				attributes.href = this.processResourceLink( attributes.href, MIME.lookup(attributes.href, 'text/html') );
 			}
 		break;
 
@@ -24,13 +24,14 @@ methods.updateAttributes = function (args) {
 
 		case 'img':
 			if (attributes.src) {
-				attributes.src = this.processResourceLink( attributes.src, MIME.lookup(attributes.src) );
+				attributes.src = this.processResourceLink( attributes.src, MIME.lookup(attributes.src, 'image/jpeg') );
 			}
 		break;
 
 		case 'script':
 			if (attributes.src) {
-				attributes.src = this.processResourceLink( attributes.src, 'application/javascript' );
+				let type = attributes.type ? 'application/'+attributes.type : 'application/javascript';
+				attributes.src = this.processResourceLink( attributes.src, type );
 			}
 		break;
 

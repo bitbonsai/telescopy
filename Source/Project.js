@@ -17,6 +17,11 @@ const UpdateCss = require("./UpdateCss");
 const TransformerHtml = require("./TransformHtml");
 const TransformerCss = require("./TransformCss");
 const Stream = require("stream");
+const MIME = require("mime");
+
+MIME.define({
+	'text/xml' : ['xml']
+});
 
 function Project(options) {
 

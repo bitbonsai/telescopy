@@ -1,17 +1,14 @@
 "use strict";
-const Fetch = require("fetch");
+const debug = require("debug")("tcopy-util");
 const methods = {};
 
-methods.retrieveWebResource = function( url, options ) {
-	return new Promise(function(resolve, reject) {
-		Fetch.fetchUrl( url, options, function( err, meta, body ){
-			if (err) return reject(err);
-			else resolve({
-				meta : meta,
-				body : body
-			});
-		});
-	});
+methods.guessMime = function( fromHeader, fromUrl ) {
+	debug( "guessingMime", [ fromHeader, fromUrl ] );
+	if (fromUrl && fromUrl !== 'application/octet-stream') {
+		return fromUrl;
+	}
+	if (fromHeader) return fromHeader;
+	return fromUrl;
 };
 
 
