@@ -4,6 +4,10 @@ const exec = require("child_process").execSync;
 const Path = require("path");
 const HTTP = require("http");
 
+/*
+ * Tests timout until headers received, and retries
+ */
+
 var mirror = Path.normalize(__dirname+"/../Data/Mirror1");
 var temp = Path.normalize(__dirname+"/../Data/Temp1");
 var server;

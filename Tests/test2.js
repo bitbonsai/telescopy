@@ -4,6 +4,10 @@ const exec = require("child_process").execSync;
 const StaticServer = require("static-server");
 const Path = require("path");
 
+/*
+ * Tests update functionality, simulating 2 remote states
+ */
+
 var remoteA = Path.normalize(__dirname+"/Fixtures/Remote2a");
 var remoteB = Path.normalize(__dirname+"/Fixtures/Remote2b");
 var mirror = Path.normalize(__dirname+"/../Data/Mirror2");

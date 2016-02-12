@@ -4,6 +4,10 @@ const exec = require("child_process").execSync;
 const StaticServer = require("static-server");
 const Path = require("path");
 
+/*
+ * Tests complex relative links and local paths
+ */
+
 var remote = Path.normalize(__dirname+"/Fixtures/Remote6");
 var mirror = Path.normalize(__dirname+"/../Data/Mirror6");
 var temp = Path.normalize(__dirname+"/../Data/Temp1");

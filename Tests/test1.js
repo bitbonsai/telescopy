@@ -4,6 +4,10 @@ const exec = require("child_process").execSync;
 const StaticServer = require("static-server");
 const Path = require("path");
 
+/*
+ * Tests basic functionality, html and css links
+ */
+
 var remote = Path.normalize(__dirname+"/Fixtures/Remote1");
 var mirror = Path.normalize(__dirname+"/../Data/Mirror1");
 var temp = Path.normalize(__dirname+"/../Data/Temp1");

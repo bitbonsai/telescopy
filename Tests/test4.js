@@ -5,6 +5,10 @@ const Path = require("path");
 const HTTP = require("http");
 const FS = require("fs");
 
+/*
+ * Tests redirect by header functionality
+ */
+
 var mirror = Path.normalize(__dirname+"/../Data/Mirror4");
 var temp = Path.normalize(__dirname+"/../Data/Temp4");
 var remote = Path.normalize(__dirname+"/Fixtures/Remote4");

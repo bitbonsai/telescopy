@@ -2,6 +2,10 @@
 const URL = require("url");
 const Filter = require("../Source/Filter.js");
 
+/*
+ * Tests filter functionality
+ */
+
 const filters = [
     {
         type : 'host',
@@ -9,7 +13,7 @@ const filters = [
         nomatch : false
     },{
         type : 'path',
-        test : /\/css/,
+        test : '/\\/css/',
         match : true
     },{
         type : 'query',
