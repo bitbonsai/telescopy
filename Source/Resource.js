@@ -4,12 +4,9 @@ const URL = require("url");
 const FS = require("fs");
 const mkdirp = require("mkdirp");
 const mime = require("mime");
-const TransformerHtml = require("./TransformHtml");
-const TransformerCss = require("./TransformCss");
 const async = require("async");
 const CP = require("child_process");
 const debug = require("debug")("tcopy-resource");
-const Stream = require("stream");
 const Path = require("path");
 const MIME = require("mime");
 const Crypto = require("crypto");
@@ -172,23 +169,8 @@ Resource.prototype.download = function(fetchStream) {
 		var transformStream;
 		var guessedMime = ths.guessMime();
 		debug("guessed Mime: ",guessedMime);
-		switch (guessedMime) {
-			case 'html':
-			case 'text/html':
-				transformStream = new TransformerHtml( ths.updateHtmlAttributes.bind(ths) );
-			break;
 
-			case 'text/css':
-				transformStream = new TransformerCss({
-					onUrl : ths.updateCssUrl.bind(ths),
-					onImport : ths.updateCssUrl.bind(ths)
-				});
-			break;
-
-			default:
-				transformStream = new Stream.PassThrough();
-			break;
-		}
+		transformStream = ths.project.getTransformStream( guessedMime, ths );
 
 		fetchStream
 			.pipe( transformStream )
@@ -241,80 +223,6 @@ Resource.prototype.overrideFromTmpFile = function(){
 			else resolve();
 		});
 	});
-};
-
-Resource.prototype.updateHtmlAttributes = function (tag, attributes) {
-	switch (tag) {
-		case 'a':
-			if (attributes.href) {
-				attributes.href = this.processResourceLink( attributes.href, 'text/html' );
-			}
-		break;
-
-		case 'link':
-			if (attributes.rel === 'canonical' && attributes.href) {
-				let absolute = this.makeUrlAbsolute( attributes.href );
-				this.setCanonicalUrl( absolute );
-				return false;	//delete it
-			}
-			if (attributes.rel === 'stylesheet' && attributes.href) {
-				attributes.href = this.processResourceLink( attributes.href, 'text/css' );
-			}
-		break;
-
-		case 'img':
-			if (attributes.src) {
-				attributes.src = this.processResourceLink( attributes.src, MIME.lookup(attributes.src) );
-			}
-		break;
-
-		case 'script':
-			if (attributes.src) {
-				attributes.src = this.processResourceLink( attributes.src, 'application/javascript' );
-			}
-		break;
-
-		case 'base':
-			if (attributes.href) {
-				this.baseUrl = attributes.href;
-				return false;	//delete it
-			}
-		break;
-
-		case 'form':
-			if (attributes.action) {
-				attributes.action = this.processResourceLink( attributes.action, 'text/html' );
-			}
-		break;
-
-		case 'button':
-			if (attributes.formaction) {
-				attributes.formaction = this.processResourceLink( attributes.formaction, 'text/html' );
-			}
-		break;
-
-		case 'meta':
-			if (attributes['http-equiv'] === 'refresh' && attributes.content) {
-				let ths = this;
-				attributes.content.replace(/^(\d+);url=(.+)$/i,function(all,time,url){
-					url = ths.processResourceLink( url, 'text/html' );
-					return `${time};url=${url}`;
-				});
-			}
-		break;
-
-		case 'option':
-			if (attributes.value && attributes.value.match(/https?\:/)) {
-				attributes.value = this.processResourceLink( attributes.value, 'text/html' );
-			}
-		break;
-	}
-	return attributes;
-};
-
-Resource.prototype.updateCssUrl = function (url) {
-	let mime = MIME.lookup(url);
-	return this.processResourceLink( url, mime );
 };
 
 /**

@@ -12,6 +12,11 @@ const HTTP = require("http");
 const HTTPS = require("https");
 const URL = require("url");
 const Filter = require("./Filter");
+const UpdateHtml = require("./UpdateHtml");
+const UpdateCss = require("./UpdateCss");
+const TransformerHtml = require("./TransformHtml");
+const TransformerCss = require("./TransformCss");
+const Stream = require("stream");
 
 function Project(options) {
 
@@ -27,6 +32,14 @@ function Project(options) {
 	this.linkRedirects = options.linkRedirects || false;
 	this.defaultIndex = options.defaultIndex || 'index';
 	this.userAgent = options.useragent || 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1';
+	this.transformers = options.transformers ? options.transformers : {
+		'text/html' : TransformerHtml,
+		'text/css' : TransformerCss
+	};
+	this.transformerOptions = options.transformerOptions ? options.transformerOptions : {
+		'text/html' : UpdateHtml,
+		'text/css' : UpdateCss
+	};
 
 	if (options.filterByUrl) {
 		this.filterByUrl = options.filterByUrl;
@@ -108,6 +121,8 @@ Project.prototype.processNext = function() {
 	},function(err){
 		ths.finishResource( res, err );
 		process.nextTick( ths.next );
+	}).catch(function(err){
+		console.log(err,err.stack.split("\n"));
 	});
 };
 
@@ -120,7 +135,7 @@ Project.prototype.finishResource = function (res, err) {
 		}.bind(this));
 	} else {
 		debug("skipped resource for error",err, err.stack ? err.stack.split("\n") : '');
-		if (err === "timeout" && ++res.retries < ths.maxRetries) {
+		if (err === "timeout" && ++res.retries < this.maxRetries) {
 			this.queue.push( res );
 		} else {
 			res.getUrls().forEach(function(url){
@@ -134,7 +149,7 @@ Project.prototype.finishResource = function (res, err) {
 
 Project.prototype.stop = function() {
 	if (!running) {
-		throw new Error("Project not running");
+		throw new Error("Cannot stop project. Project not running");
 	}
 	this.running = false;
 };
@@ -303,6 +318,7 @@ Project.prototype.skipFile = function(filePath) {
 };
 
 Project.prototype.createSymlink = function(from, to) {
+	if (from === to) return;
 	let path = Path.relative( Path.dirname(from), to);
 	debug("symlinking "+from+" => "+path);
 	FS.symlink(path,from,function(err){
@@ -346,6 +362,17 @@ Project.prototype.queryUrlFilter = function( url ){
 	}
 	obj.asked += 1;
 	return obj.allowed;
+};
+
+Project.prototype.getTransformStream = function (mime, resource) {
+	if (this.transformers[mime]) {
+		let opfn = this.transformerOptions[mime];
+		let options = opfn( resource );
+		let CL = this.transformers[mime];
+		let transformer = new CL( options );
+		return transformer;
+	}
+	return new Stream.PassThrough();
 };
 
 module.exports = Project;
