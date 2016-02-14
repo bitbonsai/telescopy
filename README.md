@@ -9,6 +9,12 @@ A horribly named website mirroring package. I wrote it because I found using wge
  * able to cancel and still use what has been downloaded so far (wget only converts links at the end, not done when canceled)
  * allows for re-download of single resources
 
+Some other features:
+
+ * fast (all streaming), but only one thread
+ * low memory overhead
+
+It is **not** a scraper that uses phantomjs.
 
 ## Usage
 
@@ -21,13 +27,22 @@ The local path to save to. Will be created if not existing.
 The URL to start the download from. If not given, the procedure will not start until **addUrl()** is called.
 
 #### options.cleanLocal `boolean`, `optional`, `default: false`
-If true, anything in the local directory will be deleted before starting.
+If true, anything in the local directory and temp dir will be deleted before starting.
 
 #### options.tempDir `string`, `optional`, `default: /tmp/telescopy`
-The TMP-directory to use. Resources are downloaded there before being moved to their final destination.
+The TMP-directory to use. Resources are downloaded there before being moved to their final destination. Also used for anything not in the LRU-Cache, if enabled.
+Will be cleaned first, according to cleanLocal, so should be empty. Will be created, if neccessary.
+
+#### options.lruCache `int`, `optional`, `default: 0`
+If set to a higher number, will enable LRU-Caching. This will increase the number of sync disk i/o in the temp-dir, but also limit memory.
+Recommended only for very large projects. Recommended values 1000 - 10000.
 
 #### options.skipExistingFiles `boolean`, `optional`, `default: false`
-If true, existing files will not be overridden. If false, they will only be overridden if the content differs.
+If true, existing files will not be checked again. If false, they will be downloaded and parsed, and overridden if the content differs.
+
+#### options.skipExistingFilesExclusion `Object`, `optional`, `default: null`
+If set, it will be checked for mime-keys. If true, this file will not be skipped.
+Example: { "text/html" : true } to not skip redownloading existing html files.
 
 #### options.onFinish `function`, `optional`
 A callback to call when the procedure is finished.
@@ -116,12 +131,13 @@ This helps in improving the filter settings.
 
 ## TODO
 
- * improve options to updat existing mirror
  * allow parsing of inline styles
- * allow hooking new html parser functions and disabling default ones
- * hide/avoid error when symlink already exists
  * stats: add count of existing files and keep updated
- * find better way to compress querystring than base64 (must be predictable)
- * export and import settings to folder and do not delete on cleanLocal, then allow loading project from local path alone
- 
+ * find better way to compress querystring than base64 (must be deterministic)
+ * traffic stats, by mime
+ * allow processResourceLink() call to skip url filter (allow filtering based on context, not url)
+ * add index link or getter for homepage file based on httpEntry
+ * fix encoding bug
+ * add wait/randomwait between requests
+ * include 404 and other error status codes in stats
 
