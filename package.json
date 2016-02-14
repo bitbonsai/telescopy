@@ -4,7 +4,20 @@
   "description": "a website mirror",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"run manually in Tests/\" && exit 1"
+    "test": "echo \"run manually in Tests/\" && exit 1",
+	"run" : "node bin/cli.js"
+  },
+  "engines" : {
+	  "node" : ">=4.2.0"
+  },
+  "homepage" : "https://github.com/Ineluki/telescopy",
+  "repository": {
+	"type": "git",
+	"url": "git://github.com/Ineluki/telescopy.git"
+  },
+  "directories" : {
+	  "lib" : "Source",
+	  "example" : "Tests"
   },
   "keywords": [
     "website",
