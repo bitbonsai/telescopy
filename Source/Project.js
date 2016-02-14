@@ -159,7 +159,7 @@ Project.prototype.finishResource = function (res, err) {
 };
 
 Project.prototype.stop = function() {
-	if (!running) {
+	if (!this.running) {
 		throw new Error("Cannot stop project. Project not running");
 	}
 	this.running = false;
