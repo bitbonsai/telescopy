@@ -18,6 +18,40 @@ It is **not** a scraper that uses phantomjs.
 
 ## Usage
 
+### Quick Example Config
+
+This is a simple config that will suffice for most projects.
+Most options can be saved in json, but not all!
+
+```javascript
+{
+	"remote" : "https://www.example.com",		//starting url
+	"local" : "./Data/Mirror",					//folder to save to
+	"cleanLocal" : true,						//clean local folder from any existing files first
+	"linkRedirects" : true,						//symlinks for redirects
+	"tempDir" : "./Data/Temp",					//temp dir, will also be cleaned
+	"urlFilter" : [{							//most important part. order is crucial
+		"type" : "path",
+		"test" : "/\.css/",
+		"match" : true							//allow all css files, regardless of domain
+	},{
+		"type" : "host",
+		"value" : "www.example.com",			
+		"nomatch" : false						//otherwise limit us to this domain
+	},{
+		"type" : "query",
+		"key" : "showcomments",
+		"match" : false							//ignore links with this query-key, regardless of value
+	},{
+		"type" : "path",
+		"test" : "/\/(blog)|(forum)\//i",
+		"match": false							//ignore links matching this path regex
+	},true]										//get everything else
+}
+```
+
+bin/run.js contains a simple example of how such a json-config can be run.
+
 ### Options
 
 #### options.local `string`, `mandatory`
@@ -71,23 +105,50 @@ The user-agent set for all requests.
 
 #### options.filterByUrl `function`, `optional`, `@param {Object} parsedUrl`
 Hook for filtering URLs. Must return true if the URL should be downloaded or false if not.
-This is the most low-level option for filtering urls. If no filter is given, this defaults to download everything with the same host as the entry-url.
+This is the most low-level option for filtering urls.
+If no filter is given (not filterByUrl nor urlFilter), this defaults to download everything with the same host as the entry-url.
 
 #### options.urlFilter `array<Filter>`, `optional`
 Declarative filter list, in order of execution. Each filter can have these attributes:
 
- * type (key of a parsed url)
- * key (needed if type = query to specify which query-key)
+ * type (key of a parsed url, see: https://nodejs.org/api/url.html#url_url_parsing)
+ * key (needed if type = query to specify the query-key)
  * comparison (operator, defaults to '===')
  * value (which value to compare against, alternative to test)
  * test (regular expression to test against)
  * match (if results in true: true for allow, false for deny)
  * nomatch (if test does not match, equivalent to match)
 
- If the type/key specified is undefined, the test is skipped. If neither match or nomatch are set, it defaults to match=true.
- If all tests are skipped, the url is rejected.
+If the type/key specified is undefined, the test is skipped. If neither match or nomatch are set, it defaults to match=true.
+If all tests are skipped, the url is rejected. You can set true as the last filter to change this.
 
- This is an alternative to filterByUrl and is ignored if the other is set.
+This is an alternative to filterByUrl and is ignored if the other is set.
+
+#### options.transformers `object<mime:Transformer>`, `optional`
+
+ You can swap out the original classes used to transform files while downloading, or add new ones here.
+ Default are:
+ ```javascript
+ {
+ 	'text/html' : Source/TransformerHtml.js,
+ 	'text/css' : Source/TransformerCss.js
+ }
+ ```
+See those files on what methods are needed.
+
+#### options.transformerOptions `object<mime:Updater>`, `optional`
+
+Every transformer needs an Updater, that handels the events.
+
+Default are:
+```javascript
+{
+   'text/html' : Source/UpdateHtml.js,
+   'text/css' : Source/UpdateCss.js
+}
+```
+See those files for the expected format.
+The this inside the hooks is the resource, so you have access to the full Source/Resource.js to modify it.
 
 
 ### API
@@ -140,4 +201,6 @@ This helps in improving the filter settings.
  * fix encoding bug
  * add wait/randomwait between requests
  * include 404 and other error status codes in stats
+ * add simple, string-based filter options with +-*
+ * save project state and use for resuming
 
