@@ -14,10 +14,13 @@ function TransformerHtml( options ) {
 	this.parser = new ParserHtml.Parser({
 		onopentag : function(name, attributes) {
 			let args = {
-				tag : name,
-				attributes : attributes,
+				tag : name.toLowerCase(),
+				attributes : {},
 				delete : false
 			};
+			for (let a in attributes) {
+				args.attributes[ a.toLowerCase() ] = attributes[a];
+			}
 			let p = ths.hook('attributes',args)
 			.then(function(args){
 				if (args.delete) {
