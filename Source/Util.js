@@ -1,5 +1,9 @@
 "use strict";
 const debug = require("debug")("tcopy-util");
+const Path = require("path");
+const FS = require("fs");
+const async = require("async");
+const mkdirp = require("mkdirp");
 const methods = {};
 
 methods.guessMime = function( fromHeader, fromUrl ) {
@@ -9,6 +13,67 @@ methods.guessMime = function( fromHeader, fromUrl ) {
 	}
 	if (fromHeader) return fromHeader;
 	return fromUrl;
+};
+
+methods.createSymlink = function(from, to) {
+	if (from === to) return;
+	let targetDir = Path.dirname( from );
+	let path = Path.relative( targetDir, to);
+	async.waterfall([
+		function(cb){	//check if parent dir exists
+			FS.stat( targetDir, function(err,stat){
+				if (err) {
+					if (err.code === 'ENOENT') {
+						cb(null,false);
+					} else {
+						cb(err);
+					}
+				} else {
+					if (!stat.isDirectory()) {
+						cb("is not a directory");
+					} else {
+						cb(null,true);
+					}
+				}
+			});
+		},function(dirExists,cb){	//create parent dir if neccessary
+			if (!dirExists) {
+				mkdirp(targetDir, cb);
+			} else {
+				cb(null, targetDir);
+			}
+		},function(made, cb){		//check if it exists as a link
+			FS.readlink( from, function(err, oldTarget){
+				if (err) {
+					if (err.code === 'ENOENT') {
+						cb(null,false);
+					} else {
+						cb(err);
+					}
+				} else {
+					if (oldTarget !== path) {
+						FS.unlink( from, function(err){
+							cb(err,true);
+						});
+					} else {
+						cb(null,true);
+					}
+				}
+			});
+		},function(linkExists,cb){	//create link if neccessary
+			if (!linkExists) {
+				FS.symlink( path, from, cb );
+			} else {
+				cb();
+			}
+		}
+	],function(err){
+		if (err) {
+			console.log("unable to create symlink!",from,path,err);
+		} else {
+			debug("created symlink: "+from+" => "+path);
+		}
+	});
 };
 
 

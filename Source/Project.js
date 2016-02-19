@@ -19,6 +19,7 @@ const TransformerCss = require("./TransformCss");
 const Stream = require("stream");
 const MIME = require("mime");
 const ProjectState = require("./ProjectState");
+const mkdirp = require("mkdirp");
 
 MIME.define({
 	'text/xml' : ['xml']
@@ -255,11 +256,11 @@ Project.prototype.cleanTempFiles = function() {
 };
 
 Project.prototype.prepareLocalDirectories = function() {
-	var dirs = [this.tempDir, this.localPath];
+	var dirs = [this.localPath, this.tempDir];
 	return new Promise(function(resolve, reject) {
 		dirs.forEach(function(dir){
 			try {
-				FS.mkdirSync(dir);
+				mkdirp.sync(dir);
 			} catch(e){
 				if (e) {
 					if (e.code === 'EEXIST') resolve();
@@ -305,23 +306,6 @@ Project.prototype.skipFile = function(filePath) {
 		if (e.code === 'ENOENT') return false;
 		else throw e;
 	}
-};
-
-Project.prototype.createSymlink = function(from, to) {
-	if (from === to) return;
-	let path = "./"+Path.relative( Path.dirname(from), to);
-	debug("symlinking "+from+" => "+path);
-	FS.lstat( from, function(err){
-		if (!err) {
-			debug("symlink already exists in "+to);
-			return;
-		}
-		FS.symlink( path, from, function(err){
-			if (err) {
-				console.log("unable to create symlink!",from,path,err);
-			}
-		});
-	});
 };
 
 Project.prototype.normalizeUrl = function (url) {

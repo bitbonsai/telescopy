@@ -140,11 +140,11 @@ Resource.prototype.process = function () {
 			let mime = ths.guessMime();
 			if (ths.canonicalUrl && ths.canonicalUrl !== ths.linkedUrl) {
 				let canonicalPath = ths.calculateLocalPathFromUrl( ths.canonicalUrl, mime );
-				ths.project.createSymlink( canonicalPath, ths.getLocalPath() );
+				Util.createSymlink( canonicalPath, ths.getLocalPath() );
 			}
 			if (ths.redirectUrl && ths.redirectUrl !== ths.linkedUrl) {
 				let redirPath = ths.calculateLocalPathFromUrl( ths.redirectUrl, mime );
-				ths.project.createSymlink( redirPath, ths.getLocalPath() );
+				Util.createSymlink( redirPath, ths.getLocalPath() );
 			}
 		} //else the other urls are ignored and downloaded seperately if needed
 
