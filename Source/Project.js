@@ -307,11 +307,14 @@ Project.prototype.skipFile = function(filePath) {
 
 Project.prototype.createSymlink = function(from, to) {
 	if (from === to) return;
-	let path = Path.relative( Path.dirname(from), to);
+	let path = "./"+Path.relative( Path.dirname(from), to);
 	debug("symlinking "+from+" => "+path);
-	FS.lstat(filePath, function(err){
-		if (!err) return;
-		FS.symlink(path,from,function(err){
+	FS.lstat( from, function(err){
+		if (!err) {
+			debug("symlink already exists in "+to);
+			return;
+		}
+		FS.symlink( path, from, function(err){
 			if (err) {
 				console.log("unable to create symlink!",from,path,err);
 			}
