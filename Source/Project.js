@@ -48,6 +48,8 @@ function Project(options) {
 		'text/html' : UpdateHtml,
 		'text/css' : UpdateCss
 	};
+	this.baseWaitTime = options.baseWaitTime || 0;
+	this.randWaitTime = options.randWaitTime || 0;
 
 	if (options.filterByUrl) {
 		this.filterByUrl = options.filterByUrl;
@@ -128,10 +130,10 @@ Project.prototype.processNext = function() {
 	res.process()
 	.then(function(){
 		ths.finishResource( res );
-		process.nextTick( ths.next );
+		setTimeout( ths.next, ths.getWaitTime() );
 	},function(err){
 		ths.finishResource( res, err );
-		process.nextTick( ths.next );
+		setTimeout( ths.next, ths.getWaitTime() );
 	}).catch(function(err){
 		console.log(err,err.stack.split("\n"));
 	});
@@ -355,6 +357,13 @@ Project.prototype.getTransformStream = function (mime, resource) {
 		return transformer;
 	}
 	return new Stream.PassThrough();
+};
+
+Project.prototype.getWaitTime = function () {
+	if (!this.randWaitTime) {
+		return this.baseWaitTime;
+	}
+	return this.baseWaitTime + Math.random() * this.randWaitTime;
 };
 
 module.exports = Project;
