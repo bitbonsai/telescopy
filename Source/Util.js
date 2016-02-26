@@ -4,6 +4,7 @@ const Path = require("path");
 const FS = require("fs");
 const async = require("async");
 const mkdirp = require("mkdirp");
+const URL = require("url");
 const methods = {};
 
 methods.guessMime = function( fromHeader, fromUrl ) {
@@ -13,6 +14,12 @@ methods.guessMime = function( fromHeader, fromUrl ) {
 	}
 	if (fromHeader) return fromHeader;
 	return fromUrl;
+};
+
+methods.normalizeUrl = function( url ) {
+	let parts = URL.parse( url );
+	parts.path = parts.path.trim();
+	return URL.format( parts );
 };
 
 methods.createSymlink = function(from, to) {

@@ -6,6 +6,7 @@ methods.updateAttributes = function (args) {
 	let attributes = args.attributes;
 	switch (args.tag) {
 		case 'a':
+		case 'area':
 			if (attributes.href) {
 				attributes.href = this.processResourceLink( attributes.href, MIME.lookup(attributes.href, 'text/html') );
 			}
