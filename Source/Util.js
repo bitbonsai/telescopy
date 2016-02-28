@@ -19,6 +19,7 @@ methods.guessMime = function( fromHeader, fromUrl ) {
 methods.normalizeUrl = function( url ) {
 	let parts = URL.parse( url );
 	parts.path = parts.path.trim();
+	if (parts.hash) parts.hash = '';
 	return URL.format( parts );
 };
 
@@ -55,7 +56,9 @@ methods.createSymlink = function(from, to) {
 					if (err.code === 'ENOENT') {
 						cb(null,false);
 					} else {
-						cb(err);
+						FS.unlink( from, function(err){
+							cb(err,true);
+						});
 					}
 				} else {
 					if (oldTarget !== path) {
