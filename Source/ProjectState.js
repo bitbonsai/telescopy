@@ -71,9 +71,11 @@ ProjectState.prototype.getUrlStats = function(){
 		denied : 0,
 		skipped : 0,
 		downloaded : 0,
-		queued : 0,
-		readAccess : this.tempReadAccess,
-		writeAccess : this.tempSaveAccess
+		queued : 0
+	};
+	if (this.lruLimit > 0) {
+		stats.readAccess = this.tempReadAccess;
+		stats.writeAccess = this.tempSaveAccess;
 	}
 	this.urls.forEach(function(obj,url){
 		if (obj.allowed === true) stats.allowed += 1;
