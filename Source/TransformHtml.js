@@ -13,6 +13,7 @@ function TransformerHtml( options ) {
 
 	this.parser = new ParserHtml.Parser({
 		onopentag : function(name, attributes) {
+			debug("onopentag",name);
 			let args = {
 				tag : name.toLowerCase(),
 				attributes : {},
@@ -27,7 +28,6 @@ function TransformerHtml( options ) {
 					return '';
 				}
 				let attributes = args.attributes;
-				debug("onopentag",name);
 				let attrStr = '';
 				for (let k in attributes) {
 					attrStr += ` ${k}="${attributes[k]}"`;
@@ -63,6 +63,18 @@ function TransformerHtml( options ) {
 		},
 		onend : function() {
 			ths.push(null);
+		},
+		oncdatastart : function(){
+			debug("cdatastart",arguments);
+		},
+		oncdataend : function() {
+			debug("cdataend",arguments);
+		},
+		oncomment : function() {
+			debug("oncomment",arguments);
+		},
+		ontext : function() {
+			debug("text",arguments);
 		}
 	},{
 		decodeEntities : true,
