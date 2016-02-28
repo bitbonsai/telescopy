@@ -60,7 +60,8 @@ ProjectState.prototype.getUrlObj = function ( url ) {
 	} else {
 		debug("readCached",url);
 	}
-	return this.urls.get( url );
+	let obj = this.urls.get( url );
+	return obj;
 };
 
 
@@ -79,10 +80,7 @@ ProjectState.prototype.getUrlStats = function(){
 		else if(obj.asked > 0) stats.denied += 1;
 		if (obj.queued) stats.queued += 1;
 		else if (obj.skipped) stats.skipped += 1;
-		else stats.downloaded += 1;
-		if (obj.queued && obj.downloaded || obj.queued && obj.skipped || obj.skipped && obj.downloaded) {
-			console.log("WARNING, invalid url obj: "+JSON.stringify( obj ));
-		}
+		else if (obj.allowed === true) stats.downloaded += 1;
 	});
 	return stats;
 };

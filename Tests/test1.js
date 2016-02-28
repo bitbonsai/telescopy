@@ -35,12 +35,12 @@ var runTest = function(){
 		remote : 'http://localhost:8080/',
 		local : mirror,
 		cleanLocal : true,
-		tempDir : temp,
-		onFinish : function(){
-			console.log( project.getUrlStats() );
-			console.log( project.getUrlFilterAnalysis() );
-			finish();
-		}
+		tempDir : temp
+	});
+	project.on("end",function(){
+		console.log( project.getUrlStats() );
+		console.log( project.getUrlFilterAnalysis() );
+		finish();
 	});
 	project.start();
 	setTimeout(function(){

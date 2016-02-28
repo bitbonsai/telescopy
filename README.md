@@ -14,7 +14,7 @@ Some other features:
  * fast (all streaming), but only one thread
  * low memory overhead
 
-It is **not** a scraper that uses phantomjs.
+It is **not** a JS-aware scraper that uses phantomjs or similar tech.
 
 ## Usage
 
@@ -77,9 +77,6 @@ If true, existing files will not be checked again. If false, they will be downlo
 #### options.skipExistingFilesExclusion `Object`, `optional`, `default: null`
 If set, it will be checked for mime-keys. If true, this file will not be skipped.
 Example: { "text/html" : true } to not skip redownloading existing html files.
-
-#### options.onFinish `function`, `optional`
-A callback to call when the procedure is finished.
 
 #### options.maxRetries `integer`, `optional`, `default: 3`
 The maximum number a resource is re-queued if there is a timeout during download.
@@ -150,6 +147,24 @@ Default are:
 See those files for the expected format.
 The this inside the hooks is the resource, so you have access to the full Source/Resource.js to modify it.
 
+### Events
+
+#### end (`boolean: finished`)
+
+Called when the queue is empty or when paused has been called and the procedure stopped.
+
+#### startresource (`Resource: res`)
+
+Called before a resource is started. Useful for logging.
+
+#### finishresource (`Error: err, Resource: res`)
+
+When a resource has completed processing or proessing was aborted.
+If an error exists, resource may be requeued or marked as skipped.
+
+#### error (`Error: err`)
+
+At an unexpected error condition, usually at the end of a promise chain.
 
 ### API
 

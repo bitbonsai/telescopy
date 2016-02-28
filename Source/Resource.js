@@ -231,8 +231,9 @@ Resource.prototype.overrideFromTmpFile = function(){
  * @return string local url
  **/
 Resource.prototype.processResourceLink = function (url, type) {
-	//debug("processResourceLink",url,type);
-	let absolute = this.makeUrlAbsolute( url );
+	debug("processResourceLink",url,type);
+	let absolute = Util.normalizeUrl( this.makeUrlAbsolute( url ) );
+	debugger;
 	if (this.project.queryUrlFilter( absolute )) {	//link to local or remote
 		let localFile = this.getLocalPath();
 		let linkFile = this.calculateLocalPathFromUrl( absolute, type );

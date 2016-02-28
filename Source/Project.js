@@ -20,6 +20,8 @@ const Stream = require("stream");
 const MIME = require("mime");
 const ProjectState = require("./ProjectState");
 const mkdirp = require("mkdirp");
+const Events = require("events");
+const util = require("util");
 
 MIME.define({
 	'text/xml' : ['xml']
@@ -27,13 +29,14 @@ MIME.define({
 
 function Project(options) {
 
+	Events.EventEmitter.call(this,{});
+
 	this.localPath = Path.normalize( options.local );
 	this.httpEntry = options.remote;
 	this.cleanLocal = options.cleanLocal || false;
 	this.tempDir = options.tempDir || '/tmp/telescopy';
 	this.skipExistingFiles = options.skipExistingFiles || false;
 	this.skipExistingFilesExclusion = options.skipExistingFilesExclusion || null;
-	this.onFinish = options.onFinish;
 	this.maxRetries = options.maxRetries || 3;
 	this.timeoutToHeaders = options.timeoutToHeaders || 6000;
 	this.timeoutToDownload = options.timeoutToDownload || 12000;
@@ -85,6 +88,8 @@ function Project(options) {
 	this.state = new ProjectState(this);
 }
 
+util.inherits(Project, Events.EventEmitter);
+
 Project.prototype.fetch = function(url) {
 	let https = url.substr(0,6) === 'https:';
 	let stream = new Fetch.FetchStream(url,{
@@ -116,7 +121,8 @@ Project.prototype.start = function() {
 		ths.queue.push( res );
 		ths.processNext();
 	}).catch(function(err){
-		console.log("error starting project",err,err.stack.split("\n"));
+		ths.emit("error",err);
+		debug("error starting project",err,err.stack.split("\n"));
 	})
 };
 
@@ -127,6 +133,7 @@ Project.prototype.processNext = function() {
 		return this.finish( !!res );
 	}
 	debug("now processing",res.linkedUrl);
+	this.emit("startresource",res);
 	var ths = this;
 	res.process()
 	.then(function(){
@@ -136,11 +143,13 @@ Project.prototype.processNext = function() {
 		ths.finishResource( res, err );
 		setTimeout( ths.next, ths.getWaitTime() );
 	}).catch(function(err){
-		console.log(err,err.stack.split("\n"));
+		ths.emit("error",err);
+		debug(err,err.stack.split("\n"));
 	});
 };
 
 Project.prototype.finishResource = function (res, err) {
+	this.emit("finishresource",err, res);
 	if (!err) {
 		res.getUrls().forEach(function(url){
 			let obj = this.getUrlObj(url);
@@ -170,11 +179,8 @@ Project.prototype.stop = function() {
 
 Project.prototype.finish = function(finished) {
 	debug("finishing",finished);
-	if (this.onFinish) {
-		this.onFinish(finished);
-	}
-	this.httpAgent.destroy();
-	this.httpsAgent.destroy();
+	this.running = false;
+	this.emit("end",finished);
 };
 
 Project.prototype.addUrl = function(url, mime) {
@@ -218,7 +224,7 @@ Project.prototype.addResourceUrls = function(set) {
 	var ths = this;
 	var added = 0;
 	set.forEach(function(entry){
-		let url = ths.normalizeUrl( entry[0] );
+		let url = entry[0];
 		if (ths.isUrlQueued(url) || ths.isUrlProcessed(url)) return;
 		debug("adding url",url);
 		let res = ths.getResourceByUrl(url);
@@ -308,16 +314,6 @@ Project.prototype.skipFile = function(filePath) {
 	}
 };
 
-Project.prototype.normalizeUrl = function (url) {
-	if (typeof url.length !== 'undefined') {
-		url = URL.parse( url, false, false );
-	}
-	if (url.hash) {
-		url.hash = '';
-	}
-	return URL.format(url);
-};
-
 Project.prototype.getUrlObj = function (url) {
 	return this.state.getUrlObj( url );
 };
@@ -348,6 +344,11 @@ Project.prototype.getWaitTime = function () {
 		return this.baseWaitTime;
 	}
 	return this.baseWaitTime + Math.random() * this.randWaitTime;
+};
+
+Project.prototype.destroy = function () {
+	this.httpAgent.destroy();
+	this.httpsAgent.destroy();
 };
 
 module.exports = Project;

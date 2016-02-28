@@ -32,9 +32,9 @@ var stage1 = function(){
 		remote : 'http://localhost:8080/',
 		local : mirror,
 		cleanLocal : true,
-		tempDir : temp,
-		onFinish : cleanup1
+		tempDir : temp
 	});
+	project.on("end",cleanup1);
 	project.start();
 };
 
@@ -45,12 +45,12 @@ var stage2 = function(){
 		local : mirror,
 		cleanLocal : false,
 		tempDir : temp,
-		onFinish : cleanup2,
 		skipExistingFiles : true,
 		skipExistingFilesExclusion : {
 			'text/html' : true
 		}
 	});
+	project.on("end",cleanup2);
 	project.start();
 };
 

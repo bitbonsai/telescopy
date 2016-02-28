@@ -17,7 +17,12 @@ methods.guessMime = function( fromHeader, fromUrl ) {
 };
 
 methods.normalizeUrl = function( url ) {
-	let parts = URL.parse( url );
+	var parts;
+	if (typeof url.length !== 'undefined') {
+		parts = URL.parse( url, false, false );
+	} else {
+		parts = url;
+	}
 	parts.path = parts.path.trim();
 	if (parts.hash) parts.hash = '';
 	return URL.format( parts );
@@ -79,7 +84,7 @@ methods.createSymlink = function(from, to) {
 		}
 	],function(err){
 		if (err) {
-			console.log("unable to create symlink!",from,path,err);
+			debug("unable to create symlink!",from,path,err);
 		} else {
 			debug("created symlink: "+from+" => "+path);
 		}

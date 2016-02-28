@@ -13,16 +13,22 @@ const FS = require("fs");
 var project;
 var checker;
 var runTest = function(){
-	options.onFinish = function(){
+	project = Telescopy.newProject( options );
+	project.on("error",function(err){
+		console.log(err, err.stack ? err.stack.split("\n") : '');
+	});
+	project.on("end",function(finished){
 		console.log( project.getUrlStats() );
 		console.log( project.getUrlFilterAnalysis() );
 		process.exit();
-	};
-	project = Telescopy.newProject( options );
+	});
+	project.on("finishresource",function(err,res){
+		console.log("Resource Finished", err ? err : '', res.getUrls());
+	});
 	project.start();
 	var check = function() {
 		let stats = project.getUrlStats();
-		console.log( "~~~ STATS ~~~ ", stats );
+		console.log( "~~~ STATS ~~~\n", stats );
 		if (stats.queued === 0) {
 			clearTimeout(checker);
 		}

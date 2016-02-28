@@ -34,10 +34,10 @@ var runTest = function(){
 		local : mirror,
 		cleanLocal : true,
 		tempDir : temp,
-		onFinish : finish,
 		timeoutToHeaders : 500,
 		maxRetries : 3
 	});
+	project.on("end",finish);
 	project.start();
 };
 

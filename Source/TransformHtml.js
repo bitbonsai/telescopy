@@ -112,7 +112,7 @@ TransformerHtml.prototype._transform = function (chunk, encoding, cb) {
 		cb();
 	}).catch(function(err){
 		ths.outputQueue = [];
-		console.log(err, err.stack ? err.stack.split("\n") : '');
+		debug(err, err.stack ? err.stack.split("\n") : '');
 		cb();
 	});
 };

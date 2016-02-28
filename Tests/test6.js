@@ -34,9 +34,9 @@ var runTest = function(){
 		remote : 'http://localhost:8080/catperson/',
 		local : mirror,
 		cleanLocal : true,
-		tempDir : temp,
-		onFinish : finish
+		tempDir : temp
 	});
+	project.on('end',finish);
 	project.start();
 };
 

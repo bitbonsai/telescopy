@@ -109,7 +109,7 @@ TransformerCss.prototype.replaceUrls = function (buffer) {
 		}
 		return secondPass;
 	}).catch(function(err){
-		console.log(err, err.stack ? err.stack.split("\n") : '');
+		debug(err, err.stack ? err.stack.split("\n") : '');
 	});
 };
 
