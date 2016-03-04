@@ -1,6 +1,6 @@
 {
   "name": "telescopy",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "a website mirror",
   "main": "index.js",
   "scripts": {
