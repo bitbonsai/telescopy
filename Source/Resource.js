@@ -141,23 +141,25 @@ Resource.prototype.process = function () {
 	 * move file into position, link if neccessary, finish up
 	 */
 	.then(function(different){
+		if (different) {
+			ths.project.addResourceUrls( ths.parsedResources );
+			return ths.overrideFromTmpFile();
+		}
+	})
 
+	.then(function(){
 		if (ths.project.linkRedirects) {
 			let mime = ths.guessMime();
 			if (ths.canonicalUrl && ths.canonicalUrl !== ths.linkedUrl) {
 				let canonicalPath = ths.calculateLocalPathFromUrl( ths.canonicalUrl, mime );
 				Util.createSymlink( canonicalPath, ths.getLocalPath() );
 			}
-			if (ths.redirectUrl && ths.redirectUrl !== ths.linkedUrl) {
+			if (ths.redirectUrl && ths.redirectUrl !== ths.linkedUrl && (!ths.canonicalUrl || ths.canonicalUrl !== ths.redirectUrl)) {
 				let redirPath = ths.calculateLocalPathFromUrl( ths.redirectUrl, mime );
 				Util.createSymlink( redirPath, ths.getLocalPath() );
 			}
 		} //else the other urls are ignored and downloaded seperately if needed
 
-		if (different) {
-			ths.project.addResourceUrls( ths.parsedResources );
-			return ths.overrideFromTmpFile();
-		}
 	});
 };
 

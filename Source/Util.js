@@ -29,6 +29,7 @@ methods.normalizeUrl = function( url ) {
 };
 
 methods.createSymlink = function(from, to) {
+	debug("create symlink: "+from+" - "+to);
 	if (from === to) return;
 	let targetDir = Path.dirname( from );
 	let path = Path.relative( targetDir, to);
