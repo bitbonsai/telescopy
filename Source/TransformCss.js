@@ -11,7 +11,7 @@ function TransformerCss( options ) {
 		'import' : options.importHooks ? options.importHooks : [],
 		'url' : options.urlHooks ? options.urlHooks : []
 	};
-
+	this.boundHook = this.hook.bind(this);
 }
 Util.inherits( TransformerCss, Stream.Transform );
 
@@ -73,12 +73,15 @@ TransformerCss.prototype._flush = function(cb) {
 };
 
 TransformerCss.prototype.replaceUrls = function (buffer) {
-	var ths = this;
+	return TransformerCss.replaceUrls( buffer, this.boundHook );
+};
+
+TransformerCss.replaceUrls = function (buffer, hookFn) {
 	var placeholders = [];
 	var placeholderCount = 0;
-	var addPlaceholder = function(hook,arg){
+	var addPlaceholder = function(hook, arg){
 		let ph = "#~#"+(placeholderCount++)+"#~#";
-		placeholders.push( ths.hook(hook,arg) );
+		placeholders.push( hookFn( hook, arg ) );
 		return ph;
 	};
 	var firstPass = buffer.replace(/(:\s*url\s*\(\s*(['"])?(.+?)\2\s*\))|(@import\s*(['"])(.+?)\5)/ig,

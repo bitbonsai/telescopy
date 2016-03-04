@@ -1,9 +1,18 @@
 "use strict";
 const MIME = require("mime");
 const methods = {};
+const TransformCss = require("./TransformCss");
 
 methods.updateAttributes = function (args) {
 	let attributes = args.attributes;
+
+	if ("style" in attributes) {
+		var styleProm = methods.updateStyles.call(this, attributes.style)
+		.then(function(style){
+			args.attributes.style = style;
+		});
+	}
+
 	switch (args.tag) {
 		case 'a':
 		case 'area':
@@ -72,12 +81,28 @@ methods.updateAttributes = function (args) {
 		break;
 
 	}
-	return args;
+	if (styleProm) {
+		return styleProm.then(function(){
+			return args;
+		});
+	} else {
+		return args;
+	}
+};
+
+methods.updateStyles = function(text) {
+	var ths = this;
+	return TransformCss.replaceUrls( text, function( hook, url ){
+		let defMime = hook === 'url' ? 'image/png' : 'text/css';
+		let mime = MIME.lookup( url, defMime );
+		return Promise.resolve( ths.processResourceLink( url, mime ) );
+	});
 };
 
 var getOptions = function(resource) {
 	return {
-		attributeHooks : [ methods.updateAttributes.bind(resource) ]
+		attributeHooks : [ methods.updateAttributes.bind(resource) ],
+		styleHooks : [ methods.updateStyles.bind(resource) ]
 	};
 };
 

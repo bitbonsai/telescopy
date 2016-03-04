@@ -4,16 +4,20 @@ const Util = require("util");
 const ParserHtml = require("htmlparser2");
 const debug = require("debug")("tcopy-transform-html");
 const Dequeue = require("dequeue");
+const TransformCss = require("./TransformCss");
 
 function TransformerHtml( options ) {
 	Stream.Transform.call(this, {});
 
 	var ths = this;
 	this.outputQueue = [];
+	var inStyle = false;
+	var styleBuffer = '';
 
 	this.parser = new ParserHtml.Parser({
 		onopentag : function(name, attributes) {
 			debug("onopentag",name);
+			if (name === 'style') inStyle = true;
 			let args = {
 				tag : name.toLowerCase(),
 				attributes : {},
@@ -42,7 +46,8 @@ function TransformerHtml( options ) {
 			ths.outputQueue.push(p);
 		},
 		ontext : function(text) {
-			let p = ths.hook('text',text)
+			let hook = inStyle ? 'style' : 'text';
+			let p = ths.hook( hook, text )
 			.then(function(text){
 				return text;
 			},function(err){
@@ -53,6 +58,11 @@ function TransformerHtml( options ) {
 		},
 		onclosetag : function(name) {
 			debug("onclosetag",arguments);
+			if (name === 'style') {
+				inStyle = false;
+				ths.outputQueue.push( ths.hook('style', styleBuffer) );
+				styleBuffer = '';
+			}
 			if (!TransformerHtml.selfClosing[name]) {
 				ths.outputQueue.push( `</${name}>` );
 			}
@@ -72,9 +82,6 @@ function TransformerHtml( options ) {
 		},
 		oncomment : function() {
 			debug("oncomment",arguments);
-		},
-		ontext : function() {
-			debug("text",arguments);
 		}
 	},{
 		decodeEntities : true,
@@ -86,7 +93,8 @@ function TransformerHtml( options ) {
 	});
 	this.hooks = {
 		'attributes' : options.attributeHooks ? options.attributeHooks : [],
-		'text' : options.textHooks ? options.textHooks : []
+		'text' : options.textHooks ? options.textHooks : [],
+		'style' : options.styleHooks ? options.styleHooks : []
 	};
 	this.lastCb = null;
 }
@@ -113,7 +121,7 @@ TransformerHtml.prototype.hook = function (name, args) {
 
 TransformerHtml.prototype._transform = function (chunk, encoding, cb) {
 	this.parser.write(chunk);
-	//not the output queue is populated
+	//now the output queue is populated
 	var ths = this;
 	Promise.all(this.outputQueue)
 	.then(function(res){
