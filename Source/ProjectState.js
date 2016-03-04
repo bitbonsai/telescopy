@@ -1,5 +1,4 @@
 "use strict";
-const LRU = require("lru-cache");
 const Path = require("path");
 const crypto = require("crypto");
 const FS = require("fs");

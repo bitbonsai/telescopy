@@ -89,13 +89,16 @@ function Project(options) {
 
 util.inherits(Project, Events.EventEmitter);
 
-Project.prototype.fetch = function(url) {
+Project.prototype.fetch = function( url, referer ) {
 	let https = url.substr(0,6) === 'https:';
 	let stream = new Fetch.FetchStream(url,{
 		userAgent : this.userAgent,
 		httpAgent : this.httpAgent,
         httpsAgent : this.httpsAgent,
-		encoding : ''
+		encoding : '',
+		headers : {
+			Referer : referer
+		}
 	});
 	stream.pause();
 	return stream;
@@ -221,7 +224,12 @@ Project.prototype.addResourceUrls = function(set) {
 		let res = ths.getResourceByUrl(url);
 		res.expectedMime = entry[2];
 		res.expectedLocalPath = entry[1];
-		ths.queue.push(res);
+		res.referer = entry[3];
+		if (res.expectedLocalPath === 'text/html') {
+			ths.queue.push(res);
+		} else {
+			ths.queue.unshift(res);
+		}
 		urlObj.setQueued();
 		added += 1;
 	});

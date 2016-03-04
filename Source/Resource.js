@@ -20,6 +20,8 @@ function Resource() {
 	this.redirectUrl = '';
 	this.baseUrl = '';
 
+	this.referer = '';
+
 	this.localPath = '';
 	this.expectedLocalPath = '';	//from link on other resource
 	this.tempFile = '';
@@ -87,7 +89,7 @@ Resource.prototype.getOfficialUrl = function(){
 
 Resource.prototype.process = function () {
 	var ths = this;
-	return Promise.resolve(ths.project.fetch( this.linkedUrl ))
+	return Promise.resolve(ths.project.fetch( this.linkedUrl, this.referer ))
 	/*
 	 * get headers
 	 */
@@ -248,13 +250,12 @@ Resource.prototype.overrideFromTmpFile = function(){
 Resource.prototype.processResourceLink = function (url, type) {
 	debug("processResourceLink",url,type);
 	let absolute = Util.normalizeUrl( this.makeUrlAbsolute( url ) );
-	debugger;
 	if (this.project.getUrlObj( absolute ).getAllowed()) {	//link to local or remote
 		let localFile = this.getLocalPath();
 		let linkFile = this.calculateLocalPathFromUrl( absolute, type );
 		let localUrl = this.calculateLocalUrl( linkFile, localFile );
 		if (this.project.skipFile( linkFile ) === false) {	//queue or skip
-			this.parsedResources.add([ absolute, linkFile, type ]);
+			this.parsedResources.add([ absolute, linkFile, type, this.linkedUrl ]);
 		}
 		return localUrl;
 	} else {
