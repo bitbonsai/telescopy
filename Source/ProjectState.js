@@ -4,57 +4,34 @@ const Path = require("path");
 const crypto = require("crypto");
 const FS = require("fs");
 const debug = require("debug")("tcopy-state");
+const ProjectUrl = require("./ProjectUrl");
+const URL = require("url");
 
-function ProjectState( project ){
-	this.project = project;
-	this.tempDir = project.tempDir;
-	this.lruLimit = project.lruCache;
-	if (this.lruLimit > 0) {
-		this.urls = LRU({
-			max : this.lruLimit,
-			dispose : this._saveToTemp.bind(this)
-		});
-	} else {
-		this.urls = new Map();
-	}
-	this.tempReadAccess = 0;
-	this.tempSaveAccess = 0;
+function ProjectState( project, urlFilter ) {
+
+	this.urlFilter = urlFilter;
+	this.urls = new Map();
+
+	this.downloadedBytes = 0;
+	this.downloads = 0;
+	this.speedAggregate = 0;
+
+	this.allowed = 0;
+	this.denied = 0;
+	this.skipped = 0;
+	this.downloaded = 0;
+	this.queued = 0;
 }
-
-ProjectState.prototype._readFromTemp = function (url) {
-	debug("readTemp",url);
-	this.tempReadAccess += 1;
-	let file = Path.join( this.tempDir, getPathFromUrl(url) );
-	try {
-		let content = FS.readFileSync(file);
-		return JSON.parse( content );
-	} catch(e){
-		return null;
-	}
-};
-
-ProjectState.prototype._saveToTemp = function (url, obj) {
-	debug("saveTemp",url);
-	this.tempSaveAccess += 1;
-	let file = Path.join( this.tempDir, getPathFromUrl(url) );
-	let content = JSON.stringify( obj );
-	return FS.writeFileSync( file, content,{ encoding: 'utf8', flags: 'w+' } );
-};
 
 ProjectState.prototype.getUrlObj = function ( url ) {
 	if (!this.urls.has(url)) {
 		let obj;
-		if (this.lruLimit > 0) {
-			obj = this._readFromTemp( url );
-		}
 		if (!obj) {
-			obj = {
-				allowed : false,
-				asked : 0,
-				skipped : false,
-				downloaded : false,
-				queued : false
-			};
+			debug("create url obj: "+url);
+			obj = new ProjectUrl( this );
+			let parsed = URL.parse( url, true, false );
+			let allowed = this.urlFilter( parsed );
+			obj.setUrl( url, allowed );
 		}
 		this.urls.set( url, obj );
 	} else {
@@ -64,26 +41,16 @@ ProjectState.prototype.getUrlObj = function ( url ) {
 	return obj;
 };
 
-
 ProjectState.prototype.getUrlStats = function(){
 	var stats = {
-		allowed : 0,
-		denied : 0,
-		skipped : 0,
-		downloaded : 0,
-		queued : 0
+		allowed : this.allowed,
+		denied : this.denied,
+		skipped : this.skipped,
+		downloaded : this.downloaded,
+		queued : this.queued,
+		bytes : this.downloadedBytes,
+		speed : ~~(this.speedAggregate / this.downloads)
 	};
-	if (this.lruLimit > 0) {
-		stats.readAccess = this.tempReadAccess;
-		stats.writeAccess = this.tempSaveAccess;
-	}
-	this.urls.forEach(function(obj,url){
-		if (obj.allowed === true) stats.allowed += 1;
-		else if(obj.asked > 0) stats.denied += 1;
-		if (obj.queued) stats.queued += 1;
-		else if (obj.skipped) stats.skipped += 1;
-		else if (obj.allowed === true) stats.downloaded += 1;
-	});
 	return stats;
 };
 
@@ -109,6 +76,12 @@ ProjectState.prototype.getUrlFilterAnalysis = function(){
 		allowed : allowedUrls,
 		denied : deniedUrls
 	};
+};
+
+ProjectState.prototype.addDownloadedBytes = function (b, bps) {
+	this.downloadedBytes += b;
+	this.speedAggregate += bps;
+	this.downloads += 1;
 };
 
 function getPathFromUrl(url){

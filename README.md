@@ -64,12 +64,8 @@ The URL to start the download from. If not given, the procedure will not start u
 If true, anything in the local directory and temp dir will be deleted before starting.
 
 #### options.tempDir `string`, `optional`, `default: /tmp/telescopy`
-The TMP-directory to use. Resources are downloaded there before being moved to their final destination. Also used for anything not in the LRU-Cache, if enabled.
+The TMP-directory to use. Resources are downloaded there before being moved to their final destination.
 Will be cleaned first, according to cleanLocal, so should be empty. Will be created, if neccessary.
-
-#### options.lruCache `int`, `optional`, `default: 0`
-If set to a higher number, will enable LRU-Caching. This will increase the number of sync disk i/o in the temp-dir, but also limit memory.
-Recommended only for very large projects. Recommended values 1000 - 10000.
 
 #### options.skipExistingFiles `boolean`, `optional`, `default: false`
 If true, existing files will not be checked again. If false, they will be downloaded and parsed, and overridden if the content differs.

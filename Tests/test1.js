@@ -37,6 +37,12 @@ var runTest = function(){
 		cleanLocal : true,
 		tempDir : temp
 	});
+	project.on("finishresource",function(err,res){
+		console.log("Resource Finished", err ? err : '', res.getUrls(), res.bytes, res.bps);
+	});
+	project.on("error",function(err){
+		console.log(err, err.stack ? err.stack.split("\n") : '');
+	});
 	project.on("end",function(){
 		console.log( project.getUrlStats() );
 		console.log( project.getUrlFilterAnalysis() );

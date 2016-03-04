@@ -55,17 +55,19 @@ function Project(options) {
 	this.baseWaitTime = options.baseWaitTime || 0;
 	this.randWaitTime = options.randWaitTime || 0;
 
+	let filterByUrl;
 	if (options.filterByUrl) {
-		this.filterByUrl = options.filterByUrl;
+		filterByUrl = options.filterByUrl;
 	} else if (options.urlFilter) {
 		this.urlFilter = new Filter(options.urlFilter);
-        this.filterByUrl = this.urlFilter.run.bind( this.urlFilter );
+        filterByUrl = this.urlFilter.run.bind( this.urlFilter );
 	} else {
 		var entryHost = URL.parse( this.httpEntry, false, true ).host;
-		this.filterByUrl = function(urlParts) {
+		filterByUrl = function(urlParts) {
 			return urlParts.host === entryHost;
 		};
 	}
+	this.state = new ProjectState( this, filterByUrl );
 
 	this.agentOptions = {
 		keepAlive : true,
@@ -81,11 +83,8 @@ function Project(options) {
 
 	this.queue = new Dequeue();
 
-	this.urls = new Map();
-
 	this.next = this.processNext.bind(this);
 
-	this.state = new ProjectState(this);
 }
 
 util.inherits(Project, Events.EventEmitter);
@@ -117,6 +116,7 @@ Project.prototype.start = function() {
 	p.then(function(){
 		if (!ths.httpEntry) return;
 		let res = ths.getResourceByUrl( ths.httpEntry );
+		ths.getUrlObj( ths.httpEntry ).setQueued();
 		res.expectedMime = 'text/html';
 		ths.queue.push( res );
 		ths.processNext();
@@ -127,11 +127,11 @@ Project.prototype.start = function() {
 };
 
 Project.prototype.processNext = function() {
-	var res = this.queue.shift();
-	if (!res || this.running === false) {
+	if (this.running === false || this.queue.length === 0) {
 		this.running = false;
-		return this.finish( !!res );
+		return this.finish( this.queue.length === 0 );
 	}
+	var res = this.queue.shift();
 	debug("now processing",res.linkedUrl);
 	this.emit("startresource",res);
 	var ths = this;
@@ -143,18 +143,19 @@ Project.prototype.processNext = function() {
 		ths.finishResource( res, err );
 		setTimeout( ths.next, ths.getWaitTime() );
 	}).catch(function(err){
+		console.error(err);
 		ths.emit("error",err);
-		debug(err,err.stack.split("\n"));
+		debug(err,err.stack ? err.stack.split("\n") : '');
 	});
 };
 
 Project.prototype.finishResource = function (res, err) {
 	this.emit("finishresource",err, res);
 	if (!err) {
+		this.state.addDownloadedBytes( res.bytes, res.bps );
 		res.getUrls().forEach(function(url){
 			let obj = this.getUrlObj(url);
-			obj.queued = false;
-			obj.downloaded = true;
+			obj.setDownloaded();
 		}.bind(this));
 	} else {
 		debug("skipped resource for error",err, err.stack ? err.stack.split("\n") : '');
@@ -163,8 +164,7 @@ Project.prototype.finishResource = function (res, err) {
 		} else {
 			res.getUrls().forEach(function(url){
 				let obj = this.getUrlObj(url);
-				obj.queued = false;
-				obj.skipped = true;
+				obj.setSkipped();
 			}.bind(this));
 		}
 	}
@@ -184,31 +184,21 @@ Project.prototype.finish = function(finished) {
 };
 
 Project.prototype.addUrl = function(url, mime) {
-	if (this.isUrlQueued(url)) return false;
+	let urlObj = this.getUrlObj( url );
+	if ( urlObj.getQueued() ) return false;
 	let res = this.getResourceByUrl(url);
 	if (mime) res.expectedMime = mime;
 	this.queue.push(res);
-	this.getUrlObj(url).queued = true;
+	urlObj.setQueued();
 	if (!this.running) {
 		this.processNext();
 	}
 	return true;
 };
 
-Project.prototype.saveResourceLocally = function( res ) {
-	var localPath = this.getLocalPath( res.linkedUrl );
-	return res;
-};
-
-Project.prototype.isUrlProcessed = function( url ) {
-	let obj = this.getUrlObj(url);
-	return obj.downloaded || obj.skipped;
-};
-
-Project.prototype.getResourceByUrl = function(url, parent) {
+Project.prototype.getResourceByUrl = function( url ) {
 	let res = new Resource();
 	res.linkedUrl = url;
-	res.parentResource = parent;
 	res.project = this;
 	return res;
 };
@@ -225,20 +215,17 @@ Project.prototype.addResourceUrls = function(set) {
 	var added = 0;
 	set.forEach(function(entry){
 		let url = entry[0];
-		if (ths.isUrlQueued(url) || ths.isUrlProcessed(url)) return;
+		let urlObj = ths.getUrlObj( url );
+		if (urlObj.getIsNew() === false) return;
 		debug("adding url",url);
 		let res = ths.getResourceByUrl(url);
 		res.expectedMime = entry[2];
 		res.expectedLocalPath = entry[1];
 		ths.queue.push(res);
-		ths.getUrlObj(url).queued = true;
+		urlObj.setQueued();
 		added += 1;
 	});
 	debug( "added %s / %s resource urls", added, set.size );
-};
-
-Project.prototype.isUrlQueued = function(url) {
-	return this.getUrlObj(url).queued;
 };
 
 Project.prototype.cleanLocalFiles = function() {
@@ -281,15 +268,6 @@ Project.prototype.prepareLocalDirectories = function() {
 
 };
 
-Project.prototype.printMemory = function() {
-	let mem = process.memoryUsage();
-	let b = mem.rss+"";
-	for (let i=b.length-3; i>0; i-=3) {
-		b = b.substr(0,i)+"."+b.substr(i);
-	}
-	debug("STATS",b,this.queue.length);
-}
-
 Project.prototype.getUrlStats = function(){
 	return this.state.getUrlStats();
 };
@@ -316,16 +294,6 @@ Project.prototype.skipFile = function(filePath) {
 
 Project.prototype.getUrlObj = function (url) {
 	return this.state.getUrlObj( url );
-};
-
-Project.prototype.queryUrlFilter = function( url ){
-	let obj = this.getUrlObj(url);
-	if (obj.asked === 0) {
-		let parsed = URL.parse( url, true, false );
-		obj.allowed = this.filterByUrl( parsed );
-	}
-	obj.asked += 1;
-	return obj.allowed;
 };
 
 Project.prototype.getTransformStream = function (mime, resource) {

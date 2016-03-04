@@ -10,6 +10,7 @@ const debug = require("debug")("tcopy-resource");
 const Path = require("path");
 const MIME = require("mime");
 const Crypto = require("crypto");
+const BandwidthStream = require("./BandwidthStream");
 
 function Resource() {
 	this.project = null;
@@ -30,6 +31,9 @@ function Resource() {
 	this.expectedMime = '';
 
 	this.retries = 0;
+	this.bytesDownloaded = 0;
+	this.downloadSpeed = 0;
+	this.bytesExisting = 0;
 }
 
 /*
@@ -171,8 +175,14 @@ Resource.prototype.download = function(fetchStream) {
 		debug("guessed Mime: ",guessedMime);
 
 		transformStream = ths.project.getTransformStream( guessedMime, ths );
+		var bandwidthStream = new BandwidthStream();
+		bandwidthStream.on("bandwidth",function(data){
+			ths.bytes = data.size;
+			ths.bps = data.size / data.duration;
+		});
 
 		fetchStream
+			.pipe( bandwidthStream )
 			.pipe( transformStream )
 			.pipe( saveStream );
 
@@ -190,11 +200,16 @@ Resource.prototype.download = function(fetchStream) {
 };
 
 Resource.prototype.isTempFileDifferent = function () {
-	var ths = this;new Promise(function(resolve, reject) {
+	var ths = this;
+	return new Promise(function(resolve, reject) {
 		async.parallel([
 			function(cb){
 				let hash = new Crypto.Hash("sha1");
-				FS.createReadStream( ths.localPath ).pipe(hash).on("end",cb);
+				let sizeCheck = new BandwidthStream();
+				sizeCheck.on("bandwidth",function(data){
+					ths.bytesExisting = data.size;
+				});
+				FS.createReadStream( ths.localPath ).pipe(sizeCheck).pipe(hash).on("end",cb);
 			},
 			function(cb){
 				let hash = new Crypto.Hash("sha1");
@@ -234,7 +249,7 @@ Resource.prototype.processResourceLink = function (url, type) {
 	debug("processResourceLink",url,type);
 	let absolute = Util.normalizeUrl( this.makeUrlAbsolute( url ) );
 	debugger;
-	if (this.project.queryUrlFilter( absolute )) {	//link to local or remote
+	if (this.project.getUrlObj( absolute ).getAllowed()) {	//link to local or remote
 		let localFile = this.getLocalPath();
 		let linkFile = this.calculateLocalPathFromUrl( absolute, type );
 		let localUrl = this.calculateLocalUrl( linkFile, localFile );
