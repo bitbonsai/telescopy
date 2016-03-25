@@ -22,6 +22,8 @@ const ProjectState = require("./ProjectState");
 const mkdirp = require("mkdirp");
 const Events = require("events");
 const util = require("util");
+const Socks5HttpAgent = require('socks5-http-client/lib/Agent');
+const Socks5HttpsAgent = require('socks5-https-client/lib/Agent');
 
 MIME.define({
 	'text/xml' : ['xml']
@@ -44,6 +46,7 @@ function Project(options) {
 	this.defaultIndex = options.defaultIndex || 'index';
 	this.userAgent = options.useragent || 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1';
 	this.lruCache = options.lruCache || 0;
+	this.proxy = options.proxy || null;
 	this.transformers = options.transformers ? options.transformers : {
 		'text/html' : TransformerHtml,
 		'text/css' : TransformerCss
@@ -75,8 +78,16 @@ function Project(options) {
 		maxSockets : 1000,
 		maxFreeSockets : 256
 	};
-	this.httpAgent = new HTTP.Agent(this.agentOptions);
-	this.httpsAgent = new HTTPS.Agent(this.agentOptions);
+	if (this.proxy) {
+		let proxyParsed = URL.parse( this.proxy );
+		this.agentOptions.socksHost = proxyParsed.hostname;
+		this.agentOptions.socksPort = 1*proxyParsed.port;
+		this.httpAgent = new Socks5HttpAgent(this.agentOptions);
+		this.httpsAgent = new Socks5HttpsAgent(this.agentOptions);
+	} else {
+		this.httpAgent = new HTTP.Agent(this.agentOptions);
+		this.httpsAgent = new HTTPS.Agent(this.agentOptions);
+	}
 
 	this.id = '';
 	this.running = false;
@@ -91,15 +102,17 @@ util.inherits(Project, Events.EventEmitter);
 
 Project.prototype.fetch = function( url, referer ) {
 	let https = url.substr(0,6) === 'https:';
-	let stream = new Fetch.FetchStream(url,{
+	let options = {
 		userAgent : this.userAgent,
-		httpAgent : this.httpAgent,
-        httpsAgent : this.httpsAgent,
+		agentHttp : this.httpAgent,
+		agentHttps : this.httpsAgent,
 		encoding : '',
 		headers : {
 			Referer : referer
 		}
-	});
+	};
+	let stream = new Fetch.FetchStream( url, options );
+	stream.setMaxListeners(12);
 	stream.pause();
 	return stream;
 };
