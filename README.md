@@ -96,6 +96,16 @@ The expected index-path. Added when paths end in '/'.
 #### options.userAgent `string`, `optional`, `default: 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1'`
 The user-agent set for all requests.
 
+#### options.proxy `string`,`optional`, `default: null`
+Set a proxy-URL. Currently only socks5 is supported. Can be a local tor node, like "socks5://localhost:9050" to access onion urls.
+
+#### options.baseWaitTime `int`,`optional`, `default: 0`
+Sets a base wait time in ms between requests. Can be randomized by adding randWaitTime
+
+#### options.randWaitTime `int`, `optional`, `default: 0`
+Sets a random wait time in ms, which is added to the base wait time. 
+Example: if you want between 1 and 3 sec wait time, use baseWaitTime: 1000, randWaitTime: 2000
+
 #### options.filterByUrl `function`, `optional`, `@param {Object} parsedUrl`
 Hook for filtering URLs. Must return true if the URL should be downloaded or false if not.
 This is the most low-level option for filtering urls.

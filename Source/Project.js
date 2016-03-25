@@ -45,7 +45,6 @@ function Project(options) {
 	this.linkRedirects = options.linkRedirects || false;
 	this.defaultIndex = options.defaultIndex || 'index';
 	this.userAgent = options.useragent || 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1';
-	this.lruCache = options.lruCache || 0;
 	this.proxy = options.proxy || null;
 	this.transformers = options.transformers ? options.transformers : {
 		'text/html' : TransformerHtml,
