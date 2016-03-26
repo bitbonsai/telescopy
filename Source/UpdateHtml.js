@@ -22,12 +22,12 @@ methods.updateAttributes = function (args) {
 		break;
 
 		case 'link':
-			if (attributes.rel === 'canonical' && attributes.href) {
+			if (attributes.rel.toLowerCase() === 'canonical' && attributes.href) {
 				let absolute = this.makeUrlAbsolute( attributes.href );
 				this.setCanonicalUrl( absolute );
 				args.delete = true;
 			}
-			if (attributes.rel === 'stylesheet' && attributes.href) {
+			if (attributes.rel.toLowerCase() === 'stylesheet' && attributes.href) {
 				attributes.href = this.processResourceLink( attributes.href, 'text/css' );
 			}
 		break;
@@ -65,7 +65,7 @@ methods.updateAttributes = function (args) {
 		break;
 
 		case 'meta':
-			if (attributes['http-equiv'] === 'refresh' && attributes.content) {
+			if (attributes['http-equiv'].toLowerCase() === 'refresh' && attributes.content) {
 				let ths = this;
 				attributes.content.replace(/^(\d+);url=(.+)$/i,function(all,time,url){
 					url = ths.processResourceLink( url, 'text/html' );

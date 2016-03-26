@@ -23,7 +23,7 @@ var runTest = function(){
 		process.exit();
 	});
 	project.on("finishresource",function(err,res){
-		console.log("Resource Finished", err ? err : '', res.getUrls(), res.bytes, res.bps);
+		console.log("Resource Finished", err ? err : '', res.getUrls(), res.bytes, ~~(res.bps));
 	});
 	project.start();
 	var check = function() {

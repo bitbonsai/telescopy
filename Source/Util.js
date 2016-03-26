@@ -16,14 +16,16 @@ methods.guessMime = function( fromHeader, fromUrl ) {
 	return fromUrl;
 };
 
-methods.normalizeUrl = function( url ) {
+methods.normalizeUrl = function( url, aggressive ) {
 	var parts;
 	if (typeof url.length !== 'undefined') {
 		parts = URL.parse( url, false, false );
 	} else {
 		parts = url;
 	}
-	parts.path = parts.path.trim();
+	if (aggressive) {
+		parts.pathname = parts.pathname.replace(/([^ -~])|(%[0-9a-z]{2})/ig,'');
+	}
 	if (parts.hash) parts.hash = '';
 	return URL.format( parts );
 };

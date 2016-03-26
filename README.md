@@ -103,8 +103,12 @@ Set a proxy-URL. Currently only socks5 is supported. Can be a local tor node, li
 Sets a base wait time in ms between requests. Can be randomized by adding randWaitTime
 
 #### options.randWaitTime `int`, `optional`, `default: 0`
-Sets a random wait time in ms, which is added to the base wait time. 
+Sets a random wait time in ms, which is added to the base wait time.
 Example: if you want between 1 and 3 sec wait time, use baseWaitTime: 1000, randWaitTime: 2000
+
+#### options.aggressiveUrlSanitation `bool`, `optional`, `default: false`
+Enables a more thorough sanitation or urls that can be required due to intentional link mangling.
+Removes non-printable and entities (as "%A0") from the pathname.
 
 #### options.filterByUrl `function`, `optional`, `@param {Object} parsedUrl`
 Hook for filtering URLs. Must return true if the URL should be downloaded or false if not.

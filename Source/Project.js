@@ -56,6 +56,7 @@ function Project(options) {
 	};
 	this.baseWaitTime = options.baseWaitTime || 0;
 	this.randWaitTime = options.randWaitTime || 0;
+	this.aggressiveUrlSanitation = options.aggressiveUrlSanitation || false;
 
 	let filterByUrl;
 	if (options.filterByUrl) {
@@ -206,6 +207,7 @@ Project.prototype.addUrl = function(url, mime) {
 	this.queue.push(res);
 	urlObj.setQueued();
 	if (!this.running) {
+		this.running = true;
 		this.processNext();
 	}
 	return true;
@@ -237,7 +239,7 @@ Project.prototype.addResourceUrls = function(set) {
 		res.expectedMime = entry[2];
 		res.expectedLocalPath = entry[1];
 		res.referer = entry[3];
-		if (res.expectedLocalPath === 'text/html') {
+		if (res.expectedMime === 'text/html') {
 			ths.queue.push(res);
 		} else {
 			ths.queue.unshift(res);
