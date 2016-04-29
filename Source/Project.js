@@ -80,6 +80,7 @@ function Project(options) {
 	};
 	if (this.proxy) {
 		let proxyParsed = URL.parse( this.proxy );
+		this.agentOptions.keepAlive = false;	//workaround for some bug
 		this.agentOptions.socksHost = proxyParsed.hostname;
 		this.agentOptions.socksPort = 1*proxyParsed.port;
 		this.httpAgent = new Socks5HttpAgent(this.agentOptions);
