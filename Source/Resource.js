@@ -369,7 +369,7 @@ Resource.prototype.calculateLocalPathFromUrl = function ( url, mime ) {
 			queryString = Crypto.createHash('sha512').update(queryString).digest("base64");
 		}
 	}
-	let ext = this.project.mime.extension( mime );
+	let ext = mime ? this.project.mime.extension( mime ) : Path.extname(url).substr(1);
 	let ending = "." + (ext ? ext : 'html');
 	let path = parsedUrl.pathname && parsedUrl.pathname.length > 1
 				? parsedUrl.pathname : '/';

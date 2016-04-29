@@ -35,8 +35,7 @@ var runTest = function(){
 	var project = new Telescopy({
 		remote : 'http://localhost:8080/',
 		local : mirror,
-		cleanLocal : true,
-		tempDir : temp
+		cleanLocal : true
 	});
 	project.on("finishresource",function(err,res){
 		console.log("Resource Finished", err ? err : '', res.getUrls(), res.bytes, res.bps);

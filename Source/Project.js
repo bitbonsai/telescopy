@@ -57,7 +57,7 @@ function Project(options) {
 	//expected index filename, e.g. is url ends with /
 	this.defaultIndex = options.defaultIndex || 'index';
 	//default useragent
-	this.userAgent = options.useragent || 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1';
+	this.userAgent = options.userAgent || 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1';
 	//socks proxy url:port
 	this.proxy = options.proxy || null;
 
