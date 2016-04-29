@@ -8,10 +8,16 @@ const async = require("async");
 const CP = require("child_process");
 const debug = require("debug")("tcopy-resource");
 const Path = require("path");
-const MIME = require("mime");
 const Crypto = require("crypto");
 const BandwidthStream = require("./BandwidthStream");
 
+module.exports = Resource;
+
+/**
+ * the resource procedure
+ * oversees download, transformation and saving of a file
+ * @constructor
+ **/
 function Resource() {
 	this.project = null;
 
@@ -38,9 +44,10 @@ function Resource() {
 	this.bytesExisting = 0;
 }
 
-/*
+/**
  * get the url that we should use as basis to make urls absolute
  * this is the url that we have opened
+ * @return {string} url
  */
 Resource.prototype.getOpenUrl = function(){
 	return this.redirectUrl ? this.redirectUrl : this.linkedUrl;
@@ -48,11 +55,16 @@ Resource.prototype.getOpenUrl = function(){
 
 /**
  * used to make absolute urls, overridden from base-tag
+ * @return {string} url
  */
 Resource.prototype.getBaseUrl = function() {
 	return this.baseUrl ? this.baseUrl : this.getOpenUrl();
 };
 
+/**
+ * marks a redirect by the server
+ * @param {string} url
+ **/
 Resource.prototype.setRedirectUrl = function( url ){
 	this.redirectUrl = url;
 	if (this.project.linkRedirects) {
@@ -60,6 +72,11 @@ Resource.prototype.setRedirectUrl = function( url ){
 	}
 };
 
+/**
+ * marks a found canonical url meta info
+ * must be added to the project as encountered
+ * @param {string} url
+ **/
 Resource.prototype.setCanonicalUrl = function( url ){
 	this.canonicalUrl = url;
 	if (this.project.linkRedirects) {
@@ -67,10 +84,18 @@ Resource.prototype.setCanonicalUrl = function( url ){
 	}
 };
 
+/**
+ * adds an url-alias for the same resource to the project
+ * @param {string} url
+ **/
 Resource.prototype.addUrlToProject = function( url ){
-	this.project.getUrlObj(url).queued = true;
+	this.project.getUrlObj(url).queued = true;	//use setter to avoid aggregate increase since its the same resource
 };
 
+/**
+ * retrieve all urls linked to this resource
+ * @return {array} urls
+ **/
 Resource.prototype.getUrls = function(){
 	var u = [ this.linkedUrl ];
 	if (this.redirectUrl) u.push( this.redirectUrl );
@@ -80,6 +105,7 @@ Resource.prototype.getUrls = function(){
 
 /**
  * get the best possible url
+ * @return {string} url
  */
 Resource.prototype.getOfficialUrl = function(){
 	return this.canonicalUrl ? this.canonicalUrl
@@ -87,6 +113,10 @@ Resource.prototype.getOfficialUrl = function(){
 			: this.linkedUrl;
 };
 
+/**
+ * init the process
+ * @return {Promise}
+ **/
 Resource.prototype.process = function () {
 	var ths = this;
 	return Promise.resolve(ths.project.fetch( this.linkedUrl, this.referer ))
@@ -99,7 +129,7 @@ Resource.prototype.process = function () {
 			fetchStream.on("meta",function(meta){
 				debug("meta",meta);
 				ths.remoteHeaders = meta.responseHeaders;
-				if (ths.linkedUrl !== meta.finalUrl) {
+				if (ths.linkedUrl !== meta.finalUrl) {	//have redirect
 					ths.redirectUrl = meta.finalUrl;
 					ths.setRedirectUrl( meta.finalUrl );
 				}
@@ -122,7 +152,7 @@ Resource.prototype.process = function () {
 	 * download or skip
 	 */
 	.then(function(fetchStream){
-		if (ths.localPath && ths.project.skipExistingFiles) {	//we already have a local copy - NOT IMPLEMENTED YET
+		if (ths.localPath && ths.project.skipExistingFiles) {	//we already have a local copy - NOT IMPLEMENTED YET 0.13.1
 			return true;
 		}
 		return ths.download(fetchStream);
@@ -131,7 +161,7 @@ Resource.prototype.process = function () {
 	 * check if we need to proceed
 	 */
 	.then(function(){
-		if (ths.localPath && ths.tempFile) {	// NOT IMPLEMENTED YET
+		if (ths.localPath && ths.tempFile) {	// NOT IMPLEMENTED YET 0.13.1
 			return ths.isTempFileDifferent();
 		} else {
 			return true;
@@ -163,6 +193,11 @@ Resource.prototype.process = function () {
 	});
 };
 
+/**
+ * stream management to download to temp file
+ * @param {ReadStream} fetchStream
+ * @return {Promise}
+ **/
 Resource.prototype.download = function(fetchStream) {
 	var ths = this;
 	return new Promise(function(resolve, reject) {
@@ -174,11 +209,11 @@ Resource.prototype.download = function(fetchStream) {
 			ths.tempFile = ths.project.getTmpFileName();
 		}
 		var saveStream = FS.createWriteStream( ths.tempFile );
-		var transformStream;
 		var guessedMime = ths.guessMime();
 		debug("guessed Mime: ",guessedMime);
 
-		transformStream = ths.project.getTransformStream( guessedMime, ths );
+		var transformStream = ths.project.getTransformStream( guessedMime, ths );
+
 		var bandwidthStream = new BandwidthStream();
 		bandwidthStream.on("bandwidth",function(data){
 			ths.bytes = data.size;
@@ -195,7 +230,7 @@ Resource.prototype.download = function(fetchStream) {
 			resolve();
 		});
 		fetchStream.on("error",reject);
-		fetchStream.resume();
+		fetchStream.resume();	//finally unpause to start DL
 		timer = setTimeout(function(){
 			fetchStream.emit("error","timeout");
 			fetchStream.destroy();
@@ -203,6 +238,10 @@ Resource.prototype.download = function(fetchStream) {
 	});
 };
 
+/**
+ * diff hash of tmpfile and existing file
+ * @return {Promise}
+ **/
 Resource.prototype.isTempFileDifferent = function () {
 	var ths = this;
 	return new Promise(function(resolve, reject) {
@@ -226,6 +265,10 @@ Resource.prototype.isTempFileDifferent = function () {
 	});
 };
 
+/**
+ * move temp file to final destination
+ * @return {Promise}
+ **/
 Resource.prototype.overrideFromTmpFile = function(){
 	var ths = this;
 	return new Promise(function(resolve, reject) {
@@ -245,9 +288,12 @@ Resource.prototype.overrideFromTmpFile = function(){
 };
 
 /**
- * @param string url
- * @param string type
- * @return string local url
+ * called from updater to process a link
+ * must return localized version and add it to the queue
+ * or must return original version if we will not download it
+ * @param {string} url
+ * @param {string} type
+ * @return {string} local url or old url
  **/
 Resource.prototype.processResourceLink = function (url, type) {
 	debug("processResourceLink",url,type);
@@ -265,9 +311,14 @@ Resource.prototype.processResourceLink = function (url, type) {
 	}
 };
 
+/**
+ * get mime for this resource
+ * usually the expected one must be used or we would change the already determined filename
+ * @return {string} mime
+ **/
 Resource.prototype.guessMime = function () {
 	if (this.expectedMime) return this.expectedMime;
-	let fromUrl = mime.lookup( this.linkedUrl );
+	let fromUrl = this.project.mime.lookup( this.linkedUrl );
 	let fromHeader = this.remoteHeaders ? this.remoteHeaders['content-type'] : null;
 	if (fromHeader) {
 		let cpos = fromHeader.indexOf(";");
@@ -278,12 +329,21 @@ Resource.prototype.guessMime = function () {
 	return Util.guessMime( fromHeader, fromUrl );
 };
 
+/**
+ * create absolute url from relative link
+ * @param {string} url
+ * @return {string} url
+ **/
 Resource.prototype.makeUrlAbsolute = function( url ) {
 	let baseUrl = this.getBaseUrl();
 	//debug("make absolute",baseUrl,url);
 	return URL.resolve( baseUrl, url );
 };
 
+/**
+ * cache and get local path, generate if neccessary
+ * @return {string} path
+ **/
 Resource.prototype.getLocalPath = function() {
 	if (!this._localPath) {
 		this._localPath = this.expectedLocalPath ? this.expectedLocalPath
@@ -295,6 +355,9 @@ Resource.prototype.getLocalPath = function() {
 
 /**
  * create an absolute local path based on the project and the absolute url
+ * @param {string} url
+ * @param {string} mime
+ * @return {string} path
  */
 Resource.prototype.calculateLocalPathFromUrl = function ( url, mime ) {
 	let basePath = this.project.localPath;
@@ -306,7 +369,7 @@ Resource.prototype.calculateLocalPathFromUrl = function ( url, mime ) {
 			queryString = Crypto.createHash('sha512').update(queryString).digest("base64");
 		}
 	}
-	let ext = MIME.extension( mime );
+	let ext = this.project.mime.extension( mime );
 	let ending = "." + (ext ? ext : 'html');
 	let path = parsedUrl.pathname && parsedUrl.pathname.length > 1
 				? parsedUrl.pathname : '/';
@@ -326,6 +389,9 @@ Resource.prototype.calculateLocalPathFromUrl = function ( url, mime ) {
 
 /**
  * create a relative url between two local files
+ * @param {string} link
+ * @param {string} base
+ * @return {string} url
  */
 Resource.prototype.calculateLocalUrl = function ( link, base ) {
 	let linkParsed = URL.parse( link, false, false );
@@ -337,5 +403,3 @@ Resource.prototype.calculateLocalUrl = function ( link, base ) {
 	//debug("calc localUrl from "+JSON.stringify([link,base,relLink]));
 	return relLink + search + hash;
 };
-
-module.exports = Resource;

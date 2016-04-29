@@ -28,10 +28,11 @@ var finish = function() {
 	console.log("\nREMOTE\n",remoteFiles);
 	console.log("\nMIRROR\n",mirrorFiles);
 	server.stop();
+	process.exit(0);
 };
 
 var runTest = function(){
-	var project = Telescopy.newProject({
+	var project = new Telescopy({
 		remote : 'http://localhost:8080/',
 		local : mirror,
 		cleanLocal : true,

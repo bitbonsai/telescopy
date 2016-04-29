@@ -55,7 +55,7 @@ var finish = function() {
 };
 
 var runTest = function(){
-	var project = Telescopy.newProject({
+	var project = new Telescopy({
 		remote : 'http://localhost:8080/',
 		local : mirror,
 		cleanLocal : true,
@@ -67,6 +67,7 @@ var runTest = function(){
 	project.on("end",function(){
 		console.log( project.getUrlStats() );
 		console.log( project.getUrlFilterAnalysis() );
+		project.destroy();
 		finish();
 	});
 	project.start();

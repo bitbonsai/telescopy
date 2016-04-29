@@ -28,7 +28,7 @@ var prepare = function(remote,next) {
 
 var stage1 = function(){
 	console.log("### Stage 1 ###");
-	project = Telescopy.newProject({
+	project = new Telescopy({
 		remote : 'http://localhost:8080/',
 		local : mirror,
 		cleanLocal : true,
@@ -40,7 +40,7 @@ var stage1 = function(){
 
 var stage2 = function(){
 	console.log("### Stage 2 ###");
-	project = Telescopy.newProject({
+	project = new Telescopy({
 		remote : 'http://localhost:8080/',
 		local : mirror,
 		cleanLocal : false,

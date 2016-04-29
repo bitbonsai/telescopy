@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"run manually in Tests/\" && exit 1",
-    "run": "node bin/cli.js"
+    "run": "node bin/run.js"
   },
   "engines": {
     "node": ">=4.2.0"

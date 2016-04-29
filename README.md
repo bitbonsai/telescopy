@@ -13,6 +13,9 @@ Some other features:
 
  * fast (all streaming), but only one thread
  * low memory overhead
+ * keeps stats of allowed and denied URIs and how often they appeared
+ * keeps track of downloaded bits and bps
+ * socks5 proxy support
 
 It is **not** a JS-aware scraper that uses phantomjs or similar tech.
 
@@ -24,138 +27,97 @@ This is a simple config that will suffice for most projects.
 Most options can be saved in json, but not all!
 
 ```javascript
-{
-	"remote" : "https://www.example.com",		//starting url
-	"local" : "./Data/Mirror",					//folder to save to
-	"cleanLocal" : true,						//clean local folder from any existing files first
-	"linkRedirects" : true,						//symlinks for redirects
-	"tempDir" : "./Data/Temp",					//temp dir, will also be cleaned
-	"urlFilter" : [{							//most important part. order is crucial
-		"type" : "path",
-		"test" : "/\.css/",
-		"match" : true							//allow all css files, regardless of domain
-	},{
-		"type" : "host",
-		"value" : "www.example.com",			
-		"nomatch" : false						//otherwise limit us to this domain
-	},{
-		"type" : "query",
-		"key" : "showcomments",
-		"match" : false							//ignore links with this query-key, regardless of value
-	},{
-		"type" : "path",
-		"test" : "/\/(blog)|(forum)\//i",
-		"match": false							//ignore links matching this path regex
-	},true]										//get everything else
-}
+var config = {
+  "remote" : "https://www.example.com",		//starting url
+  "local" : "./Data/Mirror",				//folder to save to
+  "cleanLocal" : true,						//clean local folder from any existing files first
+  "linkRedirects" : true,					//symlinks for redirects
+  "urlFilter" : [{							//rules are applied in order until one match/nomatch condition fits
+    "type" : "path",
+	"test" : "/\.css/",
+	"match" : true							//allow all css files, regardless of domain
+  },{
+	"type" : "host",
+	"value" : "www.example.com",			
+	"nomatch" : false						//otherwise limit us to this domain
+  },{
+	"type" : "query",
+	"key" : "showcomments",
+	"match" : false							//ignore links with this query-key, regardless of value
+  },{
+	"type" : "path",
+	"test" : "/\\/(blog)|(forum)\\//i",
+	"match": false							//ignore links matching this path regex
+  },true]									//get everything else
+};
+
+var project = new Telescopy(project);
+project.start();
 ```
 
-bin/run.js contains a simple example of how such a json-config can be run.
+For a more complete example see bin/run.js
 
 ### Options
 
-#### options.local `string`, `mandatory`
-The local path to save to. Will be created if not existing.
+```javascript
+options.local = './mirror/'; //
+```
+| key | type | description |
+| --- | --- | --- |
+| local | string, mandatory | The local path to save to. Will be created if not existing |
+| remote | string, optional | The URL to start the download from. If not given, start() will only prepare the procedure. You need to call **addUrl()** then. |
+| cleanLocal | boolean, default: false | If true, anything in the local directory and temp dir will be deleted before starting. |
+| tempDir | string, default: local+/tmp/ | The TMP-directory to use. Resources are downloaded there before being moved to their final destination. Will be cleaned first, according to cleanLocal, so should be empty. Will be created, if neccessary. |
+| skipExistingFiles | bool, default: false | If true, existing files will not be checked again. If false, they will be downloaded and parsed, and overridden if the content differs. |
+| skipExistingFilesExclusion | object, optional | If set, it will be checked for mime-keys. If true, this file will not be skipped. Example: { "text/html" : true } to not skip redownloading existing html files. |
+| maxRetries | int, default: 3 | The maximum number a resource is re-queued if there is a timeout during download. |
+| timeoutToHeaders | int, default: 6000 | millisec until we must have received the headers from the servers before it counts as a timeout |
+| timeoutToDownload | int, default: 12000 | millisec until the full download must be complete before it counts as a timeout |
+| linkRedirects | bool, default: false | ow to handle redirects and canonical urls. If true, symlinks are created from redirect-urls and canonical urls to the path the resource was first encountered. If false, other urls are ignored, and the resource may be downloaded multiple times in different locations |
+| defaultIndex | string, default: index | The expected index-path. Added when paths end in '/' |
+| userAgent | string, optional | http user agent set for all requests |
+| proxy | string, optional | Set a proxy-URL. Currently only socks5 is supported. Can be a local tor node, e.g. "socks5://localhost:9050" to access onion urls |
+| baseWaitTime | int, default: 0 | Sets a base wait time in ms between requests. Can be randomized by adding randWaitTime |
+| randWaitTime | int, default: 0 | Sets a random wait time in ms, which is added to the base wait time. Example: if you want between 1 and 3 sec wait time, use baseWaitTime: 1000, randWaitTime: 2000 |
+| aggressiveUrlSanitation | bool, default: false | Enables a more thorough sanitation or urls that can be required due to intentional link mangling. Removes non-printable and entities (as "%A0") from the pathname. |
+| filterByUrl | function, optional | (object: parsedUrl) Hook for filtering URLs. Must return true if the URL should be downloaded or false if not. This is the most low-level option for filtering urls. If no filter is given (not filterByUrl nor urlFilter), this defaults to download everything with the same host as the entry-url. |
+| urlFilter | array, optional | Declarative filter list, prefered method for filtering. See below for full details |
+| mimeDefinitions | object, optional | {mime : [ending]} list passed to the mime-package. Mime-lookup determins the local file name and servers might reply with non-standard mime-types. |
 
-#### options.remote `string`, `optional`
-The URL to start the download from. If not given, the procedure will not start until **addUrl()** is called.
+#### urlFilter Options
 
-#### options.cleanLocal `boolean`, `optional`, `default: false`
-If true, anything in the local directory and temp dir will be deleted before starting.
-
-#### options.tempDir `string`, `optional`, `default: /tmp/telescopy`
-The TMP-directory to use. Resources are downloaded there before being moved to their final destination.
-Will be cleaned first, according to cleanLocal, so should be empty. Will be created, if neccessary.
-
-#### options.skipExistingFiles `boolean`, `optional`, `default: false`
-If true, existing files will not be checked again. If false, they will be downloaded and parsed, and overridden if the content differs.
-
-#### options.skipExistingFilesExclusion `Object`, `optional`, `default: null`
-If set, it will be checked for mime-keys. If true, this file will not be skipped.
-Example: { "text/html" : true } to not skip redownloading existing html files.
-
-#### options.maxRetries `integer`, `optional`, `default: 3`
-The maximum number a resource is re-queued if there is a timeout during download.
-
-#### options.timeoutToHeaders `integer`, `optional`, `default: 6000`
-Time until we must have received the headers from the servers before it counts as a timeout.
-
-#### options.timeoutToDownload `integer`, `optional`, `default: 12000`
-Time until the full download must be complete before it counts as a timeout.
-
-#### options.linkRedirects `boolean`, `optional`, `default: false`
-How to handle redirects and canonical urls.
-
-If true, symlinks are created from redirect-urls and canonical urls to the path the resource was first encountered.
-
-If false, other urls are ignored, and the resource may be downloaded multiple times in different locations.
-
-#### options.defaultIndex `string`, `optional`, `default: index`
-The expected index-path. Added when paths end in '/'.
-
-#### options.userAgent `string`, `optional`, `default: 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1'`
-The user-agent set for all requests.
-
-#### options.proxy `string`,`optional`, `default: null`
-Set a proxy-URL. Currently only socks5 is supported. Can be a local tor node, like "socks5://localhost:9050" to access onion urls.
-
-#### options.baseWaitTime `int`,`optional`, `default: 0`
-Sets a base wait time in ms between requests. Can be randomized by adding randWaitTime
-
-#### options.randWaitTime `int`, `optional`, `default: 0`
-Sets a random wait time in ms, which is added to the base wait time.
-Example: if you want between 1 and 3 sec wait time, use baseWaitTime: 1000, randWaitTime: 2000
-
-#### options.aggressiveUrlSanitation `bool`, `optional`, `default: false`
-Enables a more thorough sanitation or urls that can be required due to intentional link mangling.
-Removes non-printable and entities (as "%A0") from the pathname.
-
-#### options.filterByUrl `function`, `optional`, `@param {Object} parsedUrl`
-Hook for filtering URLs. Must return true if the URL should be downloaded or false if not.
-This is the most low-level option for filtering urls.
-If no filter is given (not filterByUrl nor urlFilter), this defaults to download everything with the same host as the entry-url.
-
-#### options.urlFilter `array<Filter>`, `optional`
-Declarative filter list, in order of execution. Each filter can have these attributes:
+Declarative filter list, prefered method for filtering. Must give an array of objects, each with enough of the following keys:
 
  * type (key of a parsed url, see: https://nodejs.org/api/url.html#url_url_parsing)
  * key (needed if type = query to specify the query-key)
  * comparison (operator, defaults to '===')
  * value (which value to compare against, alternative to test)
  * test (regular expression to test against)
- * match (if results in true: true for allow, false for deny)
- * nomatch (if test does not match, equivalent to match)
+ * match (if results match: true to allow, false to deny)
+ * nomatch (only if match is not set. if test does not match: true to allow, false to deny)
 
 If the type/key specified is undefined, the test is skipped. If neither match or nomatch are set, it defaults to match=true.
 If all tests are skipped, the url is rejected. You can set true as the last filter to change this.
 
 This is an alternative to filterByUrl and is ignored if the other is set.
 
-#### options.transformers `object<mime:Transformer>`, `optional`
-
- You can swap out the original classes used to transform files while downloading, or add new ones here.
- Default are:
- ```javascript
- {
- 	'text/html' : Source/TransformerHtml.js,
- 	'text/css' : Source/TransformerCss.js
- }
- ```
-See those files on what methods are needed.
-
-#### options.transformerOptions `object<mime:Updater>`, `optional`
-
-Every transformer needs an Updater, that handels the events.
-
-Default are:
+**Examples:**
 ```javascript
-{
-   'text/html' : Source/UpdateHtml.js,
-   'text/css' : Source/UpdateCss.js
+{   //whitelist domain and subdomains
+  "type":"host",
+  "nomatch":false,
+  "test":"/^([a-z]+\\.)?mydomain\\.com$/"
+}
+
+{   //blacklist anything that has the get-parameter query with a value lower than 20160101
+  "type":"query",
+  "key":"date",
+  "comparison":"<=",
+  "value":20160101,
+  "match":false
 }
 ```
-See those files for the expected format.
-The this inside the hooks is the resource, so you have access to the full Source/Resource.js to modify it.
+
 
 ### Events
 
@@ -180,15 +142,14 @@ At an unexpected error condition, usually at the end of a promise chain.
 
 The public API methods. Use other methods with care.
 
-#### Telescopy.newProject(options)
+#### new Telescopy(options)
 Creates a new project.
 
 #### project.start()
-Starts the procedure
+Starts the procedure if the option *remote* was set. Otherwise it just prepares the project and you need to call addUrl()
 
 #### project.stop()
-Stops the procedure. After finishing the current resource.
-.onFinish(false) will be called.
+Stops the procedure. After finishing the current resource the *end*-event will be called.
 
 #### project.addUrl(url)
 Adds a single URL to the queue. Will start the procedure, if it is not already running.
@@ -217,15 +178,15 @@ This helps in improving the filter settings.
 
 ## TODO
 
- * allow parsing of inline styles
- * stats: add count of existing files and keep updated
  * find better way to compress querystring than base64 (must be deterministic)
  * traffic stats, by mime
  * allow processResourceLink() call to skip url filter (allow filtering based on context, not url)
  * add index link or getter for homepage file based on httpEntry
  * fix encoding bug
- * add wait/randomwait between requests
  * include 404 and other error status codes in stats
- * add simple, string-based filter options with +-*
  * save project state and use for resuming
+ * custom handling of http status codes via config
+ * use etags to limit bandwidth usage
+ * redirect handling via meta html tag
+
 

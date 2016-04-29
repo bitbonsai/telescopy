@@ -6,6 +6,14 @@ const debug = require("debug")("tcopy-state");
 const ProjectUrl = require("./ProjectUrl");
 const URL = require("url");
 
+module.exports = ProjectState;
+
+/**
+ * keeps track of the project state
+ * @constructor
+ * @param {PROJECT} project - the main project
+ * @param {object} urlFilter - the filter fn
+ **/
 function ProjectState( project, urlFilter ) {
 
 	this.urlFilter = urlFilter;
@@ -15,6 +23,7 @@ function ProjectState( project, urlFilter ) {
 	this.downloads = 0;
 	this.speedAggregate = 0;
 
+	//state aggregate. is kept up to date at all times
 	this.allowed = 0;
 	this.denied = 0;
 	this.skipped = 0;
@@ -22,6 +31,11 @@ function ProjectState( project, urlFilter ) {
 	this.queued = 0;
 }
 
+/**
+ * called to retrieve or create a state object for an url
+ * @param {string} url
+ * @return {PROJECT_URL} obj
+ **/
 ProjectState.prototype.getUrlObj = function ( url ) {
 	if (!this.urls.has(url)) {
 		let obj;
@@ -40,6 +54,10 @@ ProjectState.prototype.getUrlObj = function ( url ) {
 	return obj;
 };
 
+/**
+ * retrieve project statistics
+ * @return {object} stats
+ **/
 ProjectState.prototype.getUrlStats = function(){
 	var stats = {
 		allowed : this.allowed,
@@ -53,6 +71,11 @@ ProjectState.prototype.getUrlStats = function(){
 	return stats;
 };
 
+/**
+ * generate analysis of filter usage
+ * warning: generation may be performance intensive in big projects
+ * @return {object} keys: allowedUrls[], deniesUrls[]
+ **/
 ProjectState.prototype.getUrlFilterAnalysis = function(){
 	var allowedUrls = [];
 	var deniedUrls = [];
@@ -77,14 +100,14 @@ ProjectState.prototype.getUrlFilterAnalysis = function(){
 	};
 };
 
+/**
+ * called internally after a resource has finished
+ * @param {int} b - bytes
+ * @param {int} bps - bytes per second
+ **/
 ProjectState.prototype.addDownloadedBytes = function (b, bps) {
 	this.downloadedBytes += b;
 	this.speedAggregate += bps;
 	this.downloads += 1;
 };
 
-function getPathFromUrl(url){
-	return "ps_"+crypto.createHash('md5').update(url).digest('hex');
-}
-
-module.exports = ProjectState;

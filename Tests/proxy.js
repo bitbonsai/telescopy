@@ -5,7 +5,7 @@ const Path = require("path");
 
 var mirror = Path.normalize(__dirname+"/../Data/Mirror1");
 var res = 0;
-var project = Telescopy.newProject({
+var project = new Telescopy({
 	remote : 'http://xmh57jrzrnw6insl.onion/',
 	local : mirror,
 	cleanLocal : true,

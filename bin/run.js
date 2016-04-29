@@ -13,7 +13,7 @@ const FS = require("fs");
 var project;
 var checker;
 var runTest = function(){
-	project = Telescopy.newProject( options );
+	project = new Telescopy( options );
 	project.on("error",function(err){
 		console.log(err, err.stack ? err.stack.split("\n") : '');
 	});

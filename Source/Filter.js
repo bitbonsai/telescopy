@@ -6,6 +6,11 @@ const compareTypes = ['=','==','===','>','<','<=','>=','!=','!=='];
 const filterTrue = function(){ return true; };
 const filterFalse = function(){ return false; };
 
+/**
+ * builds a filter function from config
+ * @param {object} filter
+ * @return {Function}
+ **/
 const buildFilter = function( filter ) {
     if (filter === true) return filterTrue;
     if (filter === false) return filterFalse;
@@ -60,10 +65,20 @@ const buildFilter = function( filter ) {
     return new Function('url',fnBody);
 };
 
+/**
+ * the filter container
+ * @constructor
+ * @param {array} filters
+ **/
 function Filter( filters ) {
     this.filters = filters.map( buildFilter );
 }
 
+/**
+ * fn to run against a parsed url obj
+ * @param {object} urlPart
+ * @return {boolean} allowed
+ **/
 Filter.prototype.run = function(urlPart) {
     for (let i=0, ii=this.filters.length; i<ii; i++) {
         let fn = this.filters[i];

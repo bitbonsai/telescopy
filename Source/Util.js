@@ -7,15 +7,27 @@ const mkdirp = require("mkdirp");
 const URL = require("url");
 const methods = {};
 
+/**
+ * procedure to determin most likely mime type based on behavior or mime-package
+ * @param {string} fromHeader
+ * @param {string} fromUrl
+ * @return {string} mime
+ **/
 methods.guessMime = function( fromHeader, fromUrl ) {
 	debug( "guessingMime", [ fromHeader, fromUrl ] );
-	if (fromUrl && fromUrl !== 'application/octet-stream') {
+	if (fromUrl && fromUrl !== 'application/octet-stream') {	//this has likely determined the filename
 		return fromUrl;
 	}
 	if (fromHeader) return fromHeader;
 	return fromUrl;
 };
 
+/**
+ * url normalization procedure
+ * @param {string} url
+ * @param {boolean} aggressive
+ * @return {string} url
+ **/
 methods.normalizeUrl = function( url, aggressive ) {
 	var parts;
 	if (typeof url.length !== 'undefined') {
@@ -30,6 +42,14 @@ methods.normalizeUrl = function( url, aggressive ) {
 	return URL.format( parts );
 };
 
+/**
+ * symlink creation procedure
+ * creates relative symlink based on absolute paths
+ * makes sure the parent dirs exist
+ * overrides existing symlinks if existing
+ * @param {string} from
+ * @param {string} to
+ **/
 methods.createSymlink = function(from, to) {
 	debug("create symlink: "+from+" - "+to);
 	if (from === to) return;

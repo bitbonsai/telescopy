@@ -30,7 +30,7 @@ var finish = function() {
 };
 
 var runTest = function(){
-	var project = Telescopy.newProject({
+	var project = new Telescopy({
 		remote : 'http://localhost:8080/catperson/',
 		local : mirror,
 		cleanLocal : true,
