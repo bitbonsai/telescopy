@@ -51,7 +51,7 @@ var config = {
   },true]									//get everything else
 };
 
-var project = new Telescopy(project);
+var project = new Telescopy(config);
 project.start();
 ```
 
